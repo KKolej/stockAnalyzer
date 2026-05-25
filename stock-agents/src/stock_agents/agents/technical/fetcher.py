@@ -1,5 +1,5 @@
-import yfinance as yf
 import pandas as pd
+import yfinance as yf
 
 GPW_SUFFIX = ".WA"
 US_INPUT_SUFFIX = ".US"
