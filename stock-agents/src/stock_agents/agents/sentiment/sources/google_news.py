@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+import urllib.parse
+from datetime import datetime
+from email.utils import parsedate_to_datetime
+
+from ..models import Mention, SentimentLabel, SourceResult
+
+_RSS_URL = "https://news.google.com/rss/search?q={query}&hl={lang}&gl={country}&ceid={ceid}"
+
+
+def _make_url(query: str, lang: str, country: str, ceid: str) -> str:
+    return _RSS_URL.format(
+        query=urllib.parse.quote(query),
+        lang=lang,
+        country=country,
+        ceid=ceid,
+    )
+
+
+def _parse_date(text: str) -> datetime | None:
+    try:
+        return parsedate_to_datetime(text)
+    except Exception:
+        return None
+
+
+def _fetch_feed(url: str) -> list[Mention]:
+    try:
+        import feedparser
+    except ImportError:
+        return []
+
+    feed = feedparser.parse(url)
+    mentions = []
+    for entry in feed.entries:
+        title = entry.get("title", "")
+        link = entry.get("link", "")
+        published = entry.get("published", "")
+        date = _parse_date(published) if published else None
+        if title:
+            mentions.append(Mention(
+                source="Google News",
+                title=title,
+                url=link,
+                date=date,
+                score=0.0,
+                label=SentimentLabel.NEUTRAL,
+            ))
+    return mentions
+
+
+def fetch(ticker: str, company: str) -> SourceResult:
+    mentions: list[Mention] = []
+
+    # Polish-language feed for GPW stocks — "akcje" disambiguates from sponsored events
+    base_query = company if len(company) > 3 else ticker
+    pl_url = _make_url(f"{base_query} akcje", "pl", "PL", "PL:pl")
+    mentions.extend(_fetch_feed(pl_url))
+
+    # English-language feed for broader coverage
+    en_url = _make_url(f"{base_query} stock", "en", "US", "US:en")
+    mentions.extend(_fetch_feed(en_url))
+
+    if not mentions:
+        return SourceResult(name="Google News", error="no articles found")
+
+    seen: set[str] = set()
+    unique: list[Mention] = []
+    for m in mentions:
+        if m.title not in seen:
+            seen.add(m.title)
+            unique.append(m)
+
+    return SourceResult(name="Google News", mentions=unique)
