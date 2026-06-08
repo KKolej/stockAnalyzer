@@ -44,9 +44,17 @@ def rsi_signal(row: pd.Series) -> Signal | None:
 def macd_signal(row: pd.Series) -> Signal | None:
     macd = row.get("MACD")
     signal_line = row.get("MACD_signal")
+    hist = row.get("MACD_hist")
     if pd.isna(macd) or pd.isna(signal_line):
         return None
-    if macd > signal_line:
+    # Nie emituj sygnału gdy histogram jest bliski zeru (brak rozstrzygnięcia)
+    if hist is not None and not pd.isna(hist) and abs(hist) < 0.001:
+        return None
+    diff = macd - signal_line
+    ref = max(abs(macd), abs(signal_line), 1e-9)
+    if abs(diff) / ref < 0.02:
+        return None
+    if diff > 0:
         return {"indicator": "MACD", "signal": "BULLISH", "strength": "medium",
                 "note": f"MACD={macd:.3f} powyżej sygnału {signal_line:.3f}"}
     return {"indicator": "MACD", "signal": "BEARISH", "strength": "medium",

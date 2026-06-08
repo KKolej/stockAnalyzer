@@ -21,6 +21,9 @@ GPW_COMPANIES: dict[str, str] = {
 }
 
 US_SUFFIX = ".US"
+GPW_SUFFIX = ".WA"
+# Tickery GPW których symbol w Yahoo Finance różni się od polskiego skrótu
+GPW_TICKER_OVERRIDES: dict[str, str] = {"KGHM": "KGH"}
 
 
 def ticker_to_company(ticker: str) -> str:
@@ -32,3 +35,12 @@ def ticker_to_company(ticker: str) -> str:
 
 def is_gpw(ticker: str) -> bool:
     return not ticker.upper().endswith(US_SUFFIX)
+
+
+def to_yahoo_ticker(ticker: str) -> str:
+    """Konwertuje ticker wejściowy (np. PKO, CDR, TSLA.US) na symbol Yahoo Finance."""
+    upper = ticker.upper()
+    if upper.endswith(US_SUFFIX):
+        return upper.removesuffix(US_SUFFIX)
+    base = GPW_TICKER_OVERRIDES.get(upper, upper)
+    return base + GPW_SUFFIX

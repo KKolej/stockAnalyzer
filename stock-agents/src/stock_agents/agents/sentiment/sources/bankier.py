@@ -4,6 +4,7 @@ import urllib.request
 from datetime import datetime
 
 from ..models import Mention, SentimentLabel, SourceResult
+from ....ticker_map import is_gpw
 
 _BASE = "https://www.bankier.pl"
 _HEADERS = {
@@ -22,6 +23,9 @@ def _parse_date(text: str) -> datetime | None:
 
 
 def fetch(ticker: str, company: str) -> SourceResult:
+    if not is_gpw(ticker):
+        return SourceResult(name="Bankier", error="tylko GPW")
+
     try:
         from bs4 import BeautifulSoup
     except ImportError:

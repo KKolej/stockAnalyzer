@@ -13,6 +13,8 @@ fundamental-agents = "stock_agents.agents.fundamental.cli:main"
 speculator-agents = "stock_agents.agents.speculator.cli:main"
 screener-agents = "stock_agents.agents.screener.cli:main"
 macro-agents = "stock_agents.agents.macro.cli:main"
+dcf-agents = "stock_agents.agents.dcf.cli:main"
+compare-agents = "stock_agents.agents.compare.cli:main"
 
 [tool.poetry.dependencies]
 python = "^3.12"
