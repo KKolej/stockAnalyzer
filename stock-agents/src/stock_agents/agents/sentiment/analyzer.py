@@ -6,19 +6,37 @@ import re
 from .models import AnalysisMode, Mention, SentimentLabel
 
 BULLISH_KEYWORDS = [
-    "wzrost", "rośnie", "zysk", "rekord", "byczo", "kupno", "buy", "bullish",
-    "strong", "beat", "exceeded", "upgraded", "outperform", "rally", "surge",
-    "jump", "gain", "profit", "revenue", "positive", "growth", "strong buy",
-    "dobry", "świetny", "rewelacyjny", "poprawa", "wzrósł", "zwyżkuje",
-    "rekomendacja kupuj", "przewyższa", "pobił", "pobila", "osiągnął", "sukces",
+    # Angielskie
+    "buy", "bullish", "strong", "beat", "exceeded", "upgraded", "outperform",
+    "rally", "surge", "jump", "gain", "profit", "revenue", "positive", "growth",
+    "strong buy", "accumulate", "overweight", "upside", "breakout", "record high",
+    # Polskie — wyniki
+    "wzrost", "rośnie", "zysk", "rekord", "byczo", "kupno", "poprawa", "wzrósł",
+    "zwyżkuje", "przewyższa", "pobił", "pobila", "osiągnął", "sukces", "świetny",
+    "rewelacyjny", "dobry", "powyżej oczekiwań", "powyżej prognoz", "pobił prognozy",
+    # Polskie — dywidenda / skup
+    "dywidenda", "skup akcji", "wykup", "wypłata dywidendy", "rekomendacja kupuj",
+    # Polskie — strategia / wzrost
+    "ekspansja", "akwizycja", "przejęcie", "nowy kontrakt", "nowe zamówienie",
+    "zwiększył udział", "poprawił wyniki", "historyczny wynik", "nowe maksimum",
+    "podwyżka ceny docelowej", "podniosł rekomendację", "awans", "premia",
 ]
 
 BEARISH_KEYWORDS = [
-    "spadek", "spada", "strata", "niedźwiedzio", "sprzedaż", "sell", "bearish",
-    "weak", "miss", "missed", "downgraded", "underperform", "decline", "drop",
-    "fall", "loss", "negative", "warning", "risk", "concern", "trouble",
-    "zły", "słaby", "rozczarowanie", "pogorszenie", "spadł", "zniżkuje",
-    "rekomendacja sprzedaj", "poniżej", "obniżył", "obniżka", "problem",
+    # Angielskie
+    "sell", "bearish", "weak", "miss", "missed", "downgraded", "underperform",
+    "decline", "drop", "fall", "loss", "negative", "warning", "risk", "concern",
+    "trouble", "downside", "below expectations", "cut", "reduce", "underweight",
+    # Polskie — wyniki
+    "spadek", "spada", "strata", "niedźwiedzio", "rozczarowanie", "pogorszenie",
+    "spadł", "zniżkuje", "poniżej", "obniżył", "obniżka", "problem", "słaby",
+    "zły", "poniżej oczekiwań", "poniżej prognoz", "chybił prognozy",
+    # Polskie — zagrożenia
+    "restrukturyzacja", "zwolnienia", "odpis", "odpisał", "korekta", "korekta wartości",
+    "utrata kontraktu", "postępowanie sądowe", "kara", "nałożona kara", "grzywna",
+    "zmniejszył udział", "obniżył prognozę", "obniżył rekomendację", "redukcja",
+    "bankructwo", "upadłość", "likwidacja", "zawieszenie dywidendy", "brak dywidendy",
+    "rekomendacja sprzedaj", "poniżej oczekiwań", "rozczarowujący",
 ]
 
 

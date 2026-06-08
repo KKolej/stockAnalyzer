@@ -40,22 +40,25 @@ Jeśli klucz jest niedostępny, agent automatycznie wraca do trybu `keyword`.
 
 ## Źródła danych
 
-| Źródło | Metoda | Język | Limit |
-|--------|--------|-------|-------|
-| Reddit | JSON API | EN/PL | 25 postów / subreddit |
-| Bankier.pl | Scraping HTML | PL | ~30 artykułów |
-| Stockwatch.pl | Scraping HTML | PL | ~30 artykułów |
-| Google News | RSS (feedparser) | PL + EN | bez limitu |
+| Źródło | Metoda | URL | Status |
+|--------|--------|-----|--------|
+| **Bankier.pl** | Scraping HTML | `/gielda/notowania/akcje/{TICKER}/wiadomosci` | ✓ działa |
+| **Stockwatch.pl** | Scraping HTML | `/wiadomosci?s={TICKER}` | ✓ działa |
+| **Google News** | RSS (feedparser) | RSS z zapytaniem `{spółka} akcje` | ✓ działa |
+| **Reddit** | JSON API | `reddit.com/r/{sub}/search.json` | ✗ 403 — wymaga OAuth2 |
 
 Wszystkie źródła są pobierane równolegle (ThreadPoolExecutor). Niedostępne źródło nie blokuje pozostałych.
 
-### Subreddity (Reddit)
+### Google News — disambiguacja
+Polskie zapytanie używa `"{nazwa spółki} akcje"` — słowo "akcje" eliminuje artykuły niezwiązane z giełdą (np. dla PKO eliminuje wyniki o lidze PKO BP Ekstraklasa).
 
-- r/wallstreetbets
-- r/investing
-- r/stocks
-- r/polish_stocks
-- r/gielda
+### Reddit — TODO
+Reddit wymaga OAuth2 od czerwca 2023. Żeby odblokować:
+1. Zarejestruj app na [old.reddit.com/prefs/apps](https://old.reddit.com/prefs/apps) (typ: **skrypt**)
+2. Ustaw env: `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`
+3. Zaimplementuj client credentials flow w `sources/reddit.py`
+
+Subreddity: r/wallstreetbets, r/investing, r/stocks, r/polish_stocks, r/gielda
 
 ## Punktacja sentymentu
 

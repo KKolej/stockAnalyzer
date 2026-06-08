@@ -9,6 +9,10 @@ packages = [{ include = "stock_agents", from = "src" }]
 [tool.poetry.scripts]
 stock-agents = "stock_agents.cli:main"
 sentiment-agents = "stock_agents.agents.sentiment.cli:main"
+fundamental-agents = "stock_agents.agents.fundamental.cli:main"
+speculator-agents = "stock_agents.agents.speculator.cli:main"
+screener-agents = "stock_agents.agents.screener.cli:main"
+macro-agents = "stock_agents.agents.macro.cli:main"
 
 [tool.poetry.dependencies]
 python = "^3.12"
