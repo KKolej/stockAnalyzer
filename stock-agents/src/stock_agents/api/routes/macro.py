@@ -10,6 +10,6 @@ router = APIRouter(prefix="/macro", tags=["macro"])
 
 
 @router.get("")
-async def macro():
+async def macro() -> JSONResponse:
     data = get_data()
     return JSONResponse(content=to_json(data))

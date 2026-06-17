@@ -14,7 +14,7 @@ router = APIRouter(prefix="/sentiment", tags=["sentiment"])
 async def sentiment(
     ticker: str,
     mode: str = Query(default="keyword", description="keyword|claude"),
-):
+) -> JSONResponse:
     m = AnalysisMode.CLAUDE if mode == "claude" else AnalysisMode.KEYWORD
     data = get_data(ticker, m)
     return JSONResponse(content=to_json(data))

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
-
 from .models import Catalyst, PatternResult, Projection
 
 _HORIZONS = [

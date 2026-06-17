@@ -92,7 +92,7 @@ def _print_history(records: list[YearlyRecord], currency: str) -> None:
     for i, r in enumerate(records):
         prev = records[i + 1] if i + 1 < len(records) else None
         rev_yoy = _yoy(r.revenue, prev.revenue if prev else None)
-        ni_yoy = _yoy(r.net_income, prev.net_income if prev else None)
+        _yoy(r.net_income, prev.net_income if prev else None)
         rev_str = _big_short(r.revenue)
         ni_str = _big_short(r.net_income)
         mg_str = _pct(r.profit_margin)
@@ -187,7 +187,7 @@ def print_fundamental(d: FundamentalData, signals: list[Signal]) -> None:
         label = ("silna" if d.piotroski_score >= 7 else
                  "dobra" if d.piotroski_score >= 5 else
                  "słaba" if d.piotroski_score <= 2 else "średnia")
-        _row(f"Piotroski F-Score", f"{d.piotroski_score}/{d.piotroski_max}  {bar}  {label}")
+        _row("Piotroski F-Score", f"{d.piotroski_score}/{d.piotroski_max}  {bar}  {label}")
     else:
         _row("Piotroski F-Score", "n/d")
 

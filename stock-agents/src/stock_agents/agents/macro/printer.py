@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .models import MacroData, SectorPerf
+from .models import MacroData
 
 SEP = "=" * 72
 
@@ -17,10 +17,14 @@ def _bar(pos: float | None, width: int = 20) -> str:
 
 
 def _sector_arrow(change: float) -> str:
-    if change > 1.5:   return "▲▲"
-    if change > 0.3:   return "▲ "
-    if change > -0.3:  return "─ "
-    if change > -1.5:  return "▼ "
+    if change > 1.5:
+        return "▲▲"
+    if change > 0.3:
+        return "▲ "
+    if change > -0.3:
+        return "─ "
+    if change > -1.5:
+        return "▼ "
     return "▼▼"
 
 
@@ -40,9 +44,11 @@ def _context_signals(d: MacroData) -> list[tuple[str, str]]:
     eur = next((f for f in d.fx if f.code == "EUR"), None)
     if eur and eur.change_3m is not None:
         if eur.change_3m > 2:
-            signals.append(("▼", f"Słabszy PLN (EUR/PLN +{eur.change_3m:.1f}% 3M) → droższy import, lepsza część eksportu"))
+            signals.append(("▼", f"Słabszy PLN (EUR/PLN +{eur.change_3m:.1f}% 3M) "
+                                 "→ droższy import, lepsza część eksportu"))
         elif eur.change_3m < -2:
-            signals.append(("▲", f"Silniejszy PLN (EUR/PLN {eur.change_3m:.1f}% 3M) → tańszy import, gorszy eksport"))
+            signals.append(("▲", f"Silniejszy PLN (EUR/PLN {eur.change_3m:.1f}% 3M) "
+                                 "→ tańszy import, gorszy eksport"))
 
     # WIG20 pozycja
     if d.wig20_pos_52w is not None:

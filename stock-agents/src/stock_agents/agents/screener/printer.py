@@ -103,7 +103,8 @@ def print_screener(
         print(
             f"  {i:>3}  {r.ticker:<8} {name:<26} {price_str:>10}  "
             f"{_v(r.pe):>6} {_v(r.pb):>5} {_pct(r.roe):>6} {_pct(r.profit_margin):>6} "
-            f"{_pct(r.dividend_yield):>5} {_pct(r.fcf_yield):>6} {ic_str:>6} {_cap(r.market_cap):>6} {_52w(r.week_52_change):>5}"
+            f"{_pct(r.dividend_yield):>5} {_pct(r.fcf_yield):>6} {ic_str:>6} "
+            f"{_cap(r.market_cap):>6} {_52w(r.week_52_change):>5}"
         )
 
     print()

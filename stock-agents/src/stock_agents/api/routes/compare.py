@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import concurrent.futures
+
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from ...agents.compare.agent import _fetch_one
 from ..serializer import to_json
-import concurrent.futures
 
 router = APIRouter(prefix="/compare", tags=["compare"])
 
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/compare", tags=["compare"])
 @router.get("")
 async def compare(
     tickers: str = Query(description="Tickery oddzielone przecinkiem, np. CDR,PKO,KGHM"),
-):
+) -> JSONResponse:
     ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
     if len(ticker_list) < 2:
         return JSONResponse(status_code=400, content={"error": "Podaj co najmniej 2 tickery"})

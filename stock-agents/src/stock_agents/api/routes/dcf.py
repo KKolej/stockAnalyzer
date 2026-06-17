@@ -10,6 +10,6 @@ router = APIRouter(prefix="/dcf", tags=["dcf"])
 
 
 @router.get("/{ticker}")
-async def dcf(ticker: str, years: int = Query(default=10, ge=3, le=20)):
+async def dcf(ticker: str, years: int = Query(default=10, ge=3, le=20)) -> JSONResponse:
     data = fetch(ticker, years)
     return JSONResponse(content=to_json(data))

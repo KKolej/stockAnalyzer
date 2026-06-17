@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import math
 from datetime import date, datetime
@@ -15,11 +16,11 @@ def to_json(obj: Any) -> Any:
         if math.isnan(obj) or math.isinf(obj):
             return None
         return obj
-    if isinstance(obj, (int, bool, str)):
+    if isinstance(obj, int | bool | str):
         return obj
     if isinstance(obj, Enum):
         return obj.value
-    if isinstance(obj, (date, datetime)):
+    if isinstance(obj, date | datetime):
         return obj.isoformat()
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         result = {}
@@ -28,13 +29,11 @@ def to_json(obj: Any) -> Any:
         # dołącz @property zdefiniowane w klasie
         for name in dir(type(obj)):
             if isinstance(getattr(type(obj), name, None), property):
-                try:
+                with contextlib.suppress(Exception):
                     result[name] = to_json(getattr(obj, name))
-                except Exception:
-                    pass
         return result
     if isinstance(obj, dict):
         return {k: to_json(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, list | tuple):
         return [to_json(item) for item in obj]
     return str(obj)

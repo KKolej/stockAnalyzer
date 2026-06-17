@@ -121,7 +121,9 @@ def print_compare(rows: list[dict]) -> None:
     print(f"  {'─'*20}" + "─" * (col_w * len(ok_rows)))
     print(f"  {'── ZDROWIE ──':<20}")
     print(_row("D/E", ok_rows, "debt_equity", lambda v: _v(v, ".1f"), higher_is_better=False, col_w=col_w))
-    print(_row("IC (EBIT/Odsetki)", ok_rows, "interest_coverage", lambda v: _v(v, ".1f", "x") if v is not None else "n/d", higher_is_better=True, col_w=col_w))
+    print(_row("IC (EBIT/Odsetki)", ok_rows, "interest_coverage",
+               lambda v: _v(v, ".1f", "x") if v is not None else "n/d",
+               higher_is_better=True, col_w=col_w))
     print(_row("Beta", ok_rows, "beta", lambda v: _v(v, ".2f"), higher_is_better=None, col_w=col_w))
     print(_row("Dywidenda", ok_rows, "div_yield", _pct, higher_is_better=True, col_w=col_w))
 

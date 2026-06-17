@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
-
 from .models import Catalyst, PatternResult, Projection, SpeculatorData
 
 SEPARATOR = "=" * 72
@@ -50,9 +48,7 @@ def _print_projection(proj: Projection) -> None:
     icon = ICON_DIR.get(proj.direction, "─")
     direction_pl = {"UP": "WZROST", "DOWN": "SPADEK", "NEUTRAL": "NEUTRAL"}[proj.direction]
 
-    if proj.direction == "UP":
-        range_str = f"{_pct(proj.return_low)} do {_pct(proj.return_high)}"
-    elif proj.direction == "DOWN":
+    if proj.direction == "UP" or proj.direction == "DOWN":
         range_str = f"{_pct(proj.return_low)} do {_pct(proj.return_high)}"
     else:
         range_str = "bez wyraźnego kierunku"

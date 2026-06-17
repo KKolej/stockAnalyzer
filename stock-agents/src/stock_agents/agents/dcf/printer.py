@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .models import DCFResult, DCFScenario
+from .models import DCFResult
 
 SEP = "=" * 72
 

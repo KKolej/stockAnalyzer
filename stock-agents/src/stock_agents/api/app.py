@@ -29,12 +29,12 @@ app.include_router(macro.router)
 
 
 @app.get("/health")
-async def health():
+async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
 @app.get("/")
-async def index():
+async def index() -> dict[str, dict[str, str]]:
     return {
         "endpoints": {
             "GET /health": "ping",

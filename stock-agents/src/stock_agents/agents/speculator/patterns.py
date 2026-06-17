@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import math
 import re
 import urllib.request
@@ -344,10 +345,8 @@ def analyze_analyst_recommendations(ticker: str) -> PatternResult | None:
             # Parsuj cenę docelową
             m = re.search(r"[\d,\.]+", target_raw.replace(" ", "").replace("\xa0", ""))
             if m:
-                try:
+                with contextlib.suppress(ValueError):
                     targets.append(float(m.group().replace(",", ".")))
-                except ValueError:
-                    pass
 
         total = buys + holds + sells
         if total == 0:
@@ -397,8 +396,9 @@ _BANKIER_NAME_MAP: dict[str, list[str]] = {
 
 def analyze_insider_transactions(ticker: str) -> PatternResult | None:
     try:
-        from bs4 import BeautifulSoup
         from datetime import timedelta
+
+        from bs4 import BeautifulSoup
 
         names = _BANKIER_NAME_MAP.get(ticker.upper(), [ticker.upper()])
         cutoff = date.today() - timedelta(days=90)
@@ -495,7 +495,7 @@ def analyze_insider_transactions(ticker: str) -> PatternResult | None:
 # ── Katalyzatory ─────────────────────────────────────────────────────────────
 
 def get_catalysts(yahoo_ticker: str) -> list[Catalyst]:
-    catalysts = []
+    catalysts: list[Catalyst] = []
     today = date.today()
     try:
         cal = yf.Ticker(yahoo_ticker).calendar

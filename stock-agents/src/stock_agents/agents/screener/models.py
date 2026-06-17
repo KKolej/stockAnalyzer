@@ -20,10 +20,11 @@ class ScreenerRow:
     debt_to_equity: float | None
     week_52_change: float | None
     beta: float | None
-    fcf_yield: float | None
-    interest_coverage: float | None
+    fcf_yield: float | None = None
+    interest_coverage: float | None = None
     # Magic Formula (Greenblatt)
-    earnings_yield: float | None    # EBIT/EV ≈ 1/EV_EBITDA proxy
+    earnings_yield: float | None = None    # EBIT/EV ≈ 1/EV_EBITDA proxy
+    sector: str | None = None       # do wykluczania finansów/utilities z Magic Formula
     magic_rank: int | None = None   # ranking Magic Formula (niższy = lepszy)
     error: str | None = None
 

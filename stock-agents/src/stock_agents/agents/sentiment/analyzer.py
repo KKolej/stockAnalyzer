@@ -18,6 +18,8 @@ BULLISH_KEYWORDS = [
     "dywidenda", "skup akcji", "wykup", "wypłata dywidendy", "rekomendacja kupuj",
     # Polskie — strategia / wzrost
     "ekspansja", "akwizycja", "przejęcie", "nowy kontrakt", "nowe zamówienie",
+    "odbicie", "zyskuje", "zyskują", "drożeje", "wystrzelił", "wystrzeliły",
+    "nowych maksimach", "rajd",
     "zwiększył udział", "poprawił wyniki", "historyczny wynik", "nowe maksimum",
     "podwyżka ceny docelowej", "podniosł rekomendację", "awans", "premia",
 ]
@@ -36,7 +38,13 @@ BEARISH_KEYWORDS = [
     "utrata kontraktu", "postępowanie sądowe", "kara", "nałożona kara", "grzywna",
     "zmniejszył udział", "obniżył prognozę", "obniżył rekomendację", "redukcja",
     "bankructwo", "upadłość", "likwidacja", "zawieszenie dywidendy", "brak dywidendy",
-    "rekomendacja sprzedaj", "poniżej oczekiwań", "rozczarowujący",
+    "rekomendacja sprzedaj", "rozczarowujący",
+    # Polskie — język ruchów cen (częste w nagłówkach)
+    "zanurkował", "zanurkowały", "nurkuje", "nurkują", "pod wodą", "tąpnięcie",
+    "tąpnął", "runął", "runęły", "runie", "runą", "załamanie", "załamał", "katastrofa",
+    "przecena", "wyprzedaż", "wyprzedają", "panika", "tracą", "traci",
+    "nowe minimum", "nowych minimach", "nowe minima", "na minimach", "dołek",
+    "osunął", "osunęły", "presj",
 ]
 
 
@@ -99,7 +107,7 @@ def analyze_claude_batch(mentions: list[Mention], ticker: str, company: str) -> 
             max_tokens=256,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = message.content[0].text.strip()
+        raw = "".join(getattr(block, "text", "") for block in message.content).strip()
         lines = [line.strip() for line in raw.splitlines() if line.strip()]
         labels: list[SentimentLabel] = []
         for line in lines:

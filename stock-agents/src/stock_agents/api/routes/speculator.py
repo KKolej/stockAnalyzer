@@ -10,6 +10,6 @@ router = APIRouter(prefix="/speculator", tags=["speculator"])
 
 
 @router.get("/{ticker}")
-async def speculator(ticker: str):
+async def speculator(ticker: str) -> JSONResponse:
     data = get_data(ticker)
     return JSONResponse(content=to_json(data))

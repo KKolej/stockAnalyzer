@@ -4,8 +4,8 @@ import re
 import urllib.request
 from datetime import datetime
 
-from ..models import Mention, SentimentLabel, SourceResult
 from ....ticker_map import is_gpw
+from ..models import Mention, SentimentLabel, SourceResult
 
 _BASE = "https://www.stockwatch.pl"
 _HEADERS = {

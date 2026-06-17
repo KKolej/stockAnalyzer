@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import dataclasses as dc
+import functools
 import math
 
 import yfinance as yf
 
 from ...ticker_map import is_gpw, to_yahoo_ticker
 from .models import FundamentalData, YearlyRecord
-from .sources.biznesradar import FIELD_MAP, fetch_history as br_history
+from .sources.biznesradar import FIELD_MAP
+from .sources.biznesradar import fetch_history as br_history
 from .sources.biznesradar import fetch_snapshot as br_snapshot
 
 # Mapowanie wewnętrznych nazw z FIELD_MAP → pola FundamentalData (bez konwersji)
@@ -75,6 +77,11 @@ def _col_get(df, col: object, *rows: str) -> float | None:
     return None
 
 
+def _col_for_col(col: object, df, *rows: str) -> float | None:
+    """Wariant `_col_get` z kolumną jako pierwszym argumentem (do `functools.partial`)."""
+    return _col_get(df, col, *rows)
+
+
 def _yf_history(ticker: str) -> list[YearlyRecord]:
     """Pobiera dane roczne z yfinance (dla akcji US)."""
     try:
@@ -86,13 +93,15 @@ def _yf_history(ticker: str) -> list[YearlyRecord]:
 
         records = []
         for col in list(fin.columns)[:5]:
-            g = lambda df, *rows: _col_get(df, col, *rows)  # noqa: E731
+            g = functools.partial(_col_for_col, col)
             rev = g(fin, "Total Revenue")
             net = g(fin, "Net Income", "Net Income Common Stockholders")
             ebitda = g(fin, "EBITDA", "Normalized EBITDA")
             op = g(fin, "Operating Income", "EBIT")
-            op_cf = g(cf, "Operating Cash Flow", "Cash Flow From Continuing Operating Activities") if cf is not None and not cf.empty else None
-            capex_raw = g(cf, "Capital Expenditure") if cf is not None and not cf.empty else None
+            has_cf = cf is not None and not cf.empty
+            op_cf = (g(cf, "Operating Cash Flow", "Cash Flow From Continuing Operating Activities")
+                     if has_cf else None)
+            capex_raw = g(cf, "Capital Expenditure") if has_cf else None
             capex = abs(capex_raw) if capex_raw is not None else None
             margin = net / rev if net and rev else None
             records.append(YearlyRecord(
@@ -190,20 +199,32 @@ def _calc_scores(data: FundamentalData, yahoo_ticker: str) -> FundamentalData:
         return data
 
     # ── DuPont Analysis (ROE = marża × rotacja × dźwignia) ──────────────────
+    # Wszystkie trzy czynniki liczone z tego samego bilansu, by iloczyn był spójny:
+    # (NI/Rev) × (Rev/Aktywa) × (Aktywa/Kapitał) = NI/Kapitał = ROE.
     if data.profit_margin is not None:
         data.dupont_margin = data.profit_margin
+    assets_dup: float | None = None
     if data.revenue and data.revenue > 0 and bs is not None and not bs.empty:
         try:
             if "Total Assets" in bs.index:
                 assets_dup = float(bs.loc["Total Assets"].iloc[0])
-                if assets_dup > 0:
+                if assets_dup and assets_dup > 0:
                     data.dupont_asset_turnover = data.revenue / assets_dup
         except Exception:
             pass
-    if data.roe and data.profit_margin and data.dupont_asset_turnover:
-        at = data.dupont_asset_turnover
-        if at > 0 and data.profit_margin != 0:
-            data.dupont_leverage = data.roe / (data.profit_margin * at)
+    # Dźwignia = aktywa / kapitał własny (equity multiplier — zawsze ≥ 1)
+    if assets_dup and assets_dup > 0 and bs is not None and not bs.empty:
+        try:
+            equity_dup = None
+            for row in ("Common Stock Equity", "Stockholders Equity",
+                        "Total Equity Gross Minority Interest"):
+                if row in bs.index:
+                    equity_dup = float(bs.loc[row].iloc[0])
+                    break
+            if equity_dup and equity_dup > 0:
+                data.dupont_leverage = assets_dup / equity_dup
+        except Exception:
+            pass
 
     # ── Price to Cash Flow (P/CF) ────────────────────────────────────────────
     op_cf_val = info.get("operatingCashflow")

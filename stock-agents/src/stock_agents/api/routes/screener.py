@@ -32,7 +32,7 @@ async def screener(
     sort_by: str = Query(default="pe", description="pe|pb|roe|margin|div|ic|cap"),
     top: int | None = Query(default=None, ge=1, le=50),
     magic_formula: bool = False,
-):
+) -> JSONResponse:
     ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
     filters = ScreenerFilters(
         pe_max=pe_max, pe_min=pe_min, pb_max=pb_max,
