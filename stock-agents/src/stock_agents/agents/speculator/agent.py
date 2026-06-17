@@ -9,32 +9,27 @@ from .printer import print_speculator
 from .signals import build_projections
 
 
-def run(ticker: str) -> None:
+def get_data(ticker: str) -> SpeculatorData:
     company = ticker_to_company(ticker)
     yahoo_ticker = to_yahoo_ticker(ticker)
-
     try:
         info = yf.Ticker(yahoo_ticker).info
         price = info.get("currentPrice") or info.get("regularMarketPrice") or 0.0
         currency = info.get("currency", "")
     except Exception as e:
-        print_speculator(SpeculatorData(
-            ticker=ticker, company=company, current_price=0.0, currency="", error=str(e)
-        ))
-        return
+        return SpeculatorData(ticker=ticker, company=company, current_price=0.0, currency="", error=str(e))
 
     patterns, catalysts = run_all_patterns(yahoo_ticker, ticker)
     projections = build_projections(patterns, catalysts)
-
-    data = SpeculatorData(
-        ticker=ticker.upper(),
-        company=company,
-        current_price=float(price),
-        currency=currency,
-        catalysts=catalysts,
-        patterns=patterns,
-        projections=projections,
+    return SpeculatorData(
+        ticker=ticker.upper(), company=company,
+        current_price=float(price), currency=currency,
+        catalysts=catalysts, patterns=patterns, projections=projections,
     )
+
+
+def run(ticker: str) -> None:
+    data = get_data(ticker)
     print_speculator(data)
 
 

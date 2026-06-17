@@ -30,10 +30,9 @@ def _fetch_all(ticker: str, company: str) -> list[SourceResult]:
     return results
 
 
-def run(ticker: str, mode: AnalysisMode = AnalysisMode.KEYWORD) -> None:
+def get_data(ticker: str, mode: AnalysisMode = AnalysisMode.KEYWORD) -> TickerSentiment:
     company = ticker_to_company(ticker)
     raw_results = _fetch_all(ticker, company)
-
     analyzed: list[SourceResult] = []
     for source in raw_results:
         if source.available and source.mentions:
@@ -41,11 +40,8 @@ def run(ticker: str, mode: AnalysisMode = AnalysisMode.KEYWORD) -> None:
             analyzed.append(SourceResult(name=source.name, mentions=analyzed_mentions))
         else:
             analyzed.append(source)
+    return TickerSentiment(ticker=ticker.upper(), company=company, mode=mode, results=analyzed)
 
-    ts = TickerSentiment(
-        ticker=ticker.upper(),
-        company=company,
-        mode=mode,
-        results=analyzed,
-    )
-    print_sentiment(ts)
+
+def run(ticker: str, mode: AnalysisMode = AnalysisMode.KEYWORD) -> None:
+    print_sentiment(get_data(ticker, mode))
