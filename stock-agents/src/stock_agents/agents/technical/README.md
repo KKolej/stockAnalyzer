@@ -1,6 +1,8 @@
 # Agent Analizy Technicznej
 
-Pobiera dane OHLCV z Yahoo Finance i oblicza 22 wskaźniki techniczne dla spółek GPW i rynków zagranicznych. Generuje sygnały BYCZO / NIEDŹWIEDZIO / NEUTRALNIE i drukuje sformatowany raport w konsoli.
+Pobiera dane OHLCV z Yahoo Finance i oblicza 22 wskaźniki techniczne dla spółek GPW i rynków zagranicznych. Wykrywa **poziomy wsparcia/oporu**, liczy **metryki ryzyka** (zmienność roczna, Sharpe, Sortino, max drawdown, beta) i generuje sygnały BYCZO / NIEDŹWIEDZIO / NEUTRALNIE.
+
+Dostępny jako CLI (`stock-agents CDR`) oraz endpoint API (`GET /technical/CDR`).
 
 ## Uruchomienie
 
@@ -80,19 +82,41 @@ Każdy wskaźnik generuje sygnał od -2 do +2 punktów. Łączny wynik decyduje 
 | ≤ -4 | NIEDŹWIEDZIO |
 | ≤ -8 | SILNIE NIEDŹWIEDZIO |
 
+## Wsparcie / opór
+
+Moduł `support_resistance.py` wyznacza **poziome poziomy** z wykresu (nie tylko z indykatorów):
+
+- **Swing high/low** + klastrowanie bliskich poziomów (tolerancja 0.6×ATR) w strefy z liczbą dotknięć (siłą)
+- **Punkty pivot** (PP / R1 / R2 / S1 / S2) z ostatniej sesji
+- **Zniesienia Fibonacciego** od ostatniego istotnego ruchu
+- Najbliższe wsparcie/opór z dystansem w % i ATR + sygnał „cena przy strefie"
+
+## Ryzyko / zmienność
+
+Moduł `risk.py` liczy metryki standardu profesjonalnego (roczne):
+
+- **Zmienność roczna**, CAGR, total return
+- **Sharpe** i **Sortino** (vs stopa wolna od ryzyka)
+- **Max drawdown** + bieżące obsunięcie
+- **Beta** vs benchmark (GPW → EWP, US → ^GSPC)
+- % dni dodatnich, best/worst day
+- Flaga **świeżości danych** (`data_quality`) — wykrywa stale prices
+
 ## Struktura pakietu
 
 ```
 agents/technical/
-├── agent.py        ← orchestracja: fetch → indicators → signals → print
-├── fetcher.py      ← pobieranie OHLCV z Yahoo Finance (yfinance)
-├── indicators.py   ← obliczanie 22 wskaźników (pandas-ta + numpy)
-├── signals.py      ← 20 funkcji sygnałowych zwracających Signal | None
-└── printer.py      ← formatowanie i drukowanie raportu w konsoli
+├── agent.py               ← orchestracja: fetch → indicators → signals → print
+├── fetcher.py             ← OHLCV + benchmark + cache TTL + świeżość danych
+├── indicators.py          ← obliczanie 22 wskaźników (pandas-ta + numpy)
+├── signals.py             ← funkcje sygnałowe (w tym sygnał S/R)
+├── support_resistance.py  ← swingi, strefy, pivoty, Fibonacci
+├── risk.py                ← zmienność, Sharpe, Sortino, drawdown, beta
+└── printer.py             ← formatowanie i drukowanie raportu
 ```
 
 ## Zależności
 
-- `yfinance` — dane OHLCV
+- `yfinance` — dane OHLCV i benchmarki
 - `pandas-ta ≥ 0.4.71b0` — wskaźniki techniczne (prerelease z poprawkami)
-- `numpy` — ręczna implementacja CCI (obejście błędu w pandas-ta)
+- `numpy` — metryki ryzyka i ręczna implementacja CCI (obejście błędu w pandas-ta)
