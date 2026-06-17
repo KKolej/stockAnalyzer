@@ -3,7 +3,17 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import compare, dcf, fundamental, macro, screener, sentiment, speculator, technical
+from .routes import (
+    analyze,
+    compare,
+    dcf,
+    fundamental,
+    macro,
+    screener,
+    sentiment,
+    speculator,
+    technical,
+)
 
 app = FastAPI(
     title="Stock Agents API",
@@ -26,6 +36,7 @@ app.include_router(sentiment.router)
 app.include_router(dcf.router)
 app.include_router(compare.router)
 app.include_router(macro.router)
+app.include_router(analyze.router)
 
 
 @app.get("/health")
@@ -46,5 +57,6 @@ async def index() -> dict[str, dict[str, str]]:
             "GET /dcf/{ticker}": "wycena DCF, ?years=10",
             "GET /compare": "porównanie, ?tickers=CDR,PKO,KGHM",
             "GET /macro": "dane makro GPW (kursy walut, WIG20, sektory)",
+            "GET /analyze/{ticker}": "ZBIORCZA analiza — wszyscy agenci + werdykt",
         }
     }

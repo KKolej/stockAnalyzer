@@ -1,11 +1,26 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 
-from stock_agents.agents.technical.fetcher import FetchError, fetch_ohlcv
+from stock_agents.agents.technical.fetcher import (
+    FetchError,
+    benchmark_symbol,
+    data_staleness,
+    fetch_close_series,
+    fetch_ohlcv,
+)
 from stock_agents.agents.technical.indicators import add_all_indicators
 from stock_agents.agents.technical.printer import print_ticker_analysis
+from stock_agents.agents.technical.risk import compute_risk_metrics
 from stock_agents.agents.technical.signals import generate_signals
+from stock_agents.agents.technical.support_resistance import analyze_support_resistance
+
+
+def _risk_for(ticker: str, df: pd.DataFrame) -> dict[str, Any]:
+    bench = fetch_close_series(benchmark_symbol(ticker), len(df) + 10)
+    return compute_risk_metrics(df, benchmark_close=bench)
 
 
 def get_data(ticker: str, days_back: int = 90) -> dict:
@@ -52,6 +67,9 @@ def get_data(ticker: str, days_back: int = 90) -> dict:
                 "cci": _val("CCI_14"),
             },
             "signals": signals,
+            "support_resistance": analyze_support_resistance(df),
+            "risk": _risk_for(ticker, df),
+            "data_quality": data_staleness(df),
             "score": score,
             "error": None,
         }

@@ -1,4 +1,10 @@
+from typing import Any
+
 import pandas as pd
+
+from .fetcher import benchmark_name, benchmark_symbol, data_staleness, fetch_close_series
+from .risk import compute_risk_metrics
+from .support_resistance import analyze_support_resistance
 
 SIGNAL_ICON = {"BULLISH": "▲", "BEARISH": "▼", "NEUTRAL": "─"}
 STRENGTH_ORDER = {"strong": 3, "medium": 2, "weak": 1}
@@ -103,6 +109,72 @@ def print_indicators(df: pd.DataFrame) -> None:
     print()
 
 
+def _level_str(zone: dict[str, Any] | None) -> str:
+    if not zone:
+        return "n/d"
+    dist = f"{zone['dist_pct']:+.1f}%" if zone.get("dist_pct") is not None else ""
+    atr = f" / {abs(zone['dist_atr']):.1f} ATR" if zone.get("dist_atr") is not None else ""
+    return f"{zone['price']:.2f}  ({dist}{atr}, {zone['touches']} dot.)"
+
+
+def _zones_str(zones: list[dict[str, Any]], limit: int = 4) -> str:
+    if not zones:
+        return "—"
+    return "  ".join(f"{z['price']:.2f}({z['touches']})" for z in zones[:limit])
+
+
+def print_support_resistance(df: pd.DataFrame) -> None:
+    sr = analyze_support_resistance(df)
+    print(section_header("WSPARCIE / OPÓR"))
+    print(row("Najbliższy opór", _level_str(sr["nearest_resistance"])))
+    print(row("Najbliższe wsparcie", _level_str(sr["nearest_support"])))
+    print(row("Strefy oporu", _zones_str(sr["resistance"])))
+    print(row("Strefy wsparcia", _zones_str(sr["support"])))
+
+    piv = sr.get("pivots")
+    if piv:
+        print(row("Pivot (PP/R1/S1)",
+                  f"{piv['pp']:.2f}  R1 {piv['r1']:.2f} R2 {piv['r2']:.2f}  "
+                  f"S1 {piv['s1']:.2f} S2 {piv['s2']:.2f}"))
+
+    fib = sr.get("fibonacci")
+    if fib:
+        lv = fib["levels"]
+        key = "  ".join(f"{r}:{lv[r]:.2f}" for r in ("0.382", "0.500", "0.618"))
+        print(row(f"Fibonacci ({fib['direction']})", key))
+    print()
+
+
+def _rpct(value: float | None) -> str:
+    if value is None or pd.isna(value):
+        return "n/d"
+    return f"{value * 100:+.1f}%"
+
+
+def print_risk(ticker: str, df: pd.DataFrame) -> None:
+    bench = fetch_close_series(benchmark_symbol(ticker), len(df) + 10)
+    r = compute_risk_metrics(df, benchmark_close=bench)
+    print(section_header("RYZYKO / ZMIENNOŚĆ (roczne)"))
+    vol = r["ann_volatility"]
+    print(row("Zmienność roczna", f"{vol * 100:.1f}%" if vol is not None else "n/d"))
+    print(row("CAGR / Total return", f"{_rpct(r['cagr'])} / {_rpct(r['total_return'])}"))
+    print(row("Sharpe / Sortino", f"{v(r['sharpe'])} / {v(r['sortino'])}"))
+    mdd = r["max_drawdown"]
+    cur = r["current_drawdown"]
+    mdd_str = f"{_rpct(mdd)}" if mdd is not None else "n/d"
+    print(row("Max drawdown", f"{mdd_str}  (bieżące {_rpct(cur)})"))
+    beta_str = v(r["beta"]) if r["beta"] is not None else "n/d"
+    print(row(f"Beta (vs {benchmark_name(ticker)})", beta_str))
+    pos = r["positive_days_pct"]
+    pos_str = f"{pos * 100:.0f}%" if pos is not None else "n/d"
+    print(row("Dni dodatnie", f"{pos_str}  (best {_rpct(r['best_day'])} / worst {_rpct(r['worst_day'])})"))
+
+    st = data_staleness(df)
+    flag = "⚠ NIEŚWIEŻE" if st["is_stale"] else "świeże"
+    print(row("Dane", f"{st['last_date']} ({flag}, {st['age_days']}d)"))
+    print()
+
+
 def signal_score(signal: dict) -> int:
     direction = 1 if signal["signal"] == "BULLISH" else -1 if signal["signal"] == "BEARISH" else 0
     return direction * STRENGTH_ORDER.get(signal["strength"], 1)
@@ -149,5 +221,7 @@ def print_summary(signals: list[dict]) -> None:
 def print_ticker_analysis(ticker: str, df: pd.DataFrame, signals: list[dict]) -> None:
     print_header(ticker, df)
     print_indicators(df)
+    print_support_resistance(df)
+    print_risk(ticker, df)
     print_signals(signals)
     print_summary(signals)

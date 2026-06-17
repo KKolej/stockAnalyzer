@@ -27,10 +27,19 @@ def _fetch_html(path: str, ticker: str) -> str:
 
 
 def _parse_number(text: str) -> float | None:
-    clean = re.sub(r"[^\d,.\-].*", "", text.strip())
-    clean = clean.replace(" ", "").replace("\xa0", "").replace(",", ".")
+    # Biznesradar: spacja (lub nbsp) = separator tysięcy, przecinek = część dziesiętna.
+    # Najpierw usuń spacje, DOPIERO potem wyodrębnij liczbę — inaczej "2 027 mln"
+    # zostałoby ucięte do "2" (separator tysięcy traktowany jak koniec liczby).
+    clean = text.strip().replace("\xa0", "").replace(" ", "")
+    m = re.match(r"-?[\d.,]+", clean)
+    if not m:
+        return None
+    token = m.group(0)
+    if "," in token:
+        # przecinek = dziesiętne; ewentualne kropki to separatory tysięcy
+        token = token.replace(".", "").replace(",", ".")
     try:
-        return float(clean)
+        return float(token)
     except ValueError:
         return None
 
@@ -152,6 +161,13 @@ def fetch_history(ticker: str) -> list[YearlyRecord]:
                 return data[label][i]
         return None
 
+    # Biznesradar raportuje kwoty w tysiącach PLN — skalujemy do PLN absolutnych,
+    # by były spójne z danymi TTM z yfinance (które są w pełnych PLN).
+    _K = 1000.0
+
+    def _abs(v: float | None) -> float | None:
+        return v * _K if v is not None else None
+
     records = []
     for i, year in enumerate(years):
         rev = get_income("Przychody ze sprzedaży", i, "Przychody odsetkowe", "Przychody")
@@ -166,15 +182,15 @@ def fetch_history(ticker: str) -> list[YearlyRecord]:
 
         records.append(YearlyRecord(
             year=year,
-            revenue=rev,
-            net_income=net,
-            ebitda=ebitda,
-            operating_income=op,
-            eps=eps_val,
+            revenue=_abs(rev),
+            net_income=_abs(net),
+            ebitda=_abs(ebitda),
+            operating_income=_abs(op),
+            eps=eps_val,  # już w PLN na akcję — nie skalujemy
             roe=roe_val / 100 if roe_val is not None else None,
             profit_margin=margin_val / 100 if margin_val is not None else None,
-            operating_cf=op_cf,
-            capex=abs(capex_val) if capex_val is not None else None,
+            operating_cf=_abs(op_cf),
+            capex=_abs(abs(capex_val)) if capex_val is not None else None,
         ))
 
     records.reverse()  # newest first

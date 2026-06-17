@@ -6,7 +6,8 @@ System agentów do analizy giełdowej (GPW + rynki zagraniczne). Działa jako CL
 
 | Agent | CLI | Endpoint | Opis |
 |---|---|---|---|
-| **Technical** | `stock-agents CDR` | `GET /technical/CDR` | 22 wskaźniki techniczne, sygnały, score |
+| **Analyze** ⭐ | — | `GET /analyze/CDR` | **Zbiorcza analiza — wszyscy agenci + werdykt** |
+| **Technical** | `stock-agents CDR` | `GET /technical/CDR` | 22 wskaźniki, S/R, ryzyko (Sharpe/beta/DD), sygnały |
 | **Fundamental** | `fundamental-agents CDR` | `GET /fundamental/CDR` | P/E, ROE, Piotroski, Altman Z, DuPont |
 | **Screener** | `screener-agents CDR PKO` | `GET /screener?tickers=CDR,PKO` | Przesiewanie z filtrami |
 | **Speculator** | `speculator-agents CDR` | `GET /speculator/CDR` | Wzorce sezonowe, katalyzatory, projekcje |
@@ -40,7 +41,10 @@ poetry run stock-api          # uruchamia API na porcie 8000
 ## REST API
 
 ```bash
-# Analiza techniczna
+# Zbiorcza analiza — wszyscy agenci + werdykt (jeden request)
+curl http://localhost:8000/analyze/CDR
+
+# Analiza techniczna (wskaźniki + wsparcie/opór + metryki ryzyka)
 curl http://localhost:8000/technical/CDR
 
 # Analiza fundamentalna
@@ -88,6 +92,8 @@ poetry run macro-agents
 | `ANTHROPIC_API_KEY` | *(opcjonalna)* | Klucz API Claude — włącza tryb `sentiment --mode claude` |
 | `API_HOST` | `0.0.0.0` | Adres nasłuchiwania serwera |
 | `API_PORT` | `8000` | Port serwera |
+| `CACHE_TTL` | `900` | Czas życia cache (s) dla pobrań rynkowych — ważne w chmurze |
+| `CACHE_ENABLED` | `1` | `0` wyłącza cache TTL |
 
 ## Tickery
 

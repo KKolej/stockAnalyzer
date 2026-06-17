@@ -1,5 +1,9 @@
 
+from typing import Any
+
 import pandas as pd
+
+from .support_resistance import NEAR_ATR_MULT, analyze_support_resistance
 
 RSI_OVERSOLD = 30
 RSI_OVERBOUGHT = 70
@@ -340,8 +344,48 @@ def volume_spike_signal(df: pd.DataFrame) -> Signal | None:
     return None
 
 
+def _strength_from_touches(touches: int) -> str:
+    if touches >= 3:
+        return "strong"
+    if touches == 2:
+        return "medium"
+    return "weak"
+
+
+def support_resistance_signal(sr: dict[str, Any]) -> Signal | None:
+    """Sygnał gdy cena jest tuż przy strefie wsparcia (byczo) lub oporu (niedźwiedzio)."""
+    price = sr.get("price")
+    atr = sr.get("atr")
+    sup = sr.get("nearest_support")
+    res = sr.get("nearest_resistance")
+    if not price:
+        return None
+
+    # próg bliskości: 0.5×ATR, a gdy brak ATR — 1% ceny
+    threshold = (atr * NEAR_ATR_MULT) if atr else (price * 0.01)
+
+    dist_sup = abs(price - sup["price"]) if sup is not None else None
+    dist_res = abs(res["price"] - price) if res is not None else None
+
+    # wsparcie ma pierwszeństwo, gdy jest bliżej (lub jako jedyne w zasięgu)
+    if sup is not None and dist_sup is not None and dist_sup <= threshold and (
+        dist_res is None or dist_sup <= dist_res
+    ):
+        return {"indicator": "Wsparcie", "signal": "BULLISH",
+                "strength": _strength_from_touches(sup["touches"]),
+                "note": f"Cena {price:.2f} przy wsparciu {sup['price']:.2f} "
+                        f"({sup['touches']} dotknięć) — szansa na odbicie"}
+    if res is not None and dist_res is not None and dist_res <= threshold:
+        return {"indicator": "Opór", "signal": "BEARISH",
+                "strength": _strength_from_touches(res["touches"]),
+                "note": f"Cena {price:.2f} przy oporze {res['price']:.2f} "
+                        f"({res['touches']} dotknięć) — ryzyko odrzucenia"}
+    return None
+
+
 def generate_signals(df: pd.DataFrame) -> list[Signal]:
     row = df.iloc[-1]
+    sr = analyze_support_resistance(df)
     candidates = [
         rsi_signal(row),
         stoch_signal(row),
@@ -363,5 +407,6 @@ def generate_signals(df: pd.DataFrame) -> list[Signal]:
         cmf_signal(row),
         mfi_signal(row),
         volume_spike_signal(df),
+        support_resistance_signal(sr),
     ]
     return [s for s in candidates if s is not None]
