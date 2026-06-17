@@ -50,26 +50,42 @@ def _passes(row: ScreenerRow, f: ScreenerFilters) -> bool:
     return all(checks)
 
 
+# Greenblatt wyklucza spółki finansowe i użyteczności publicznej —
+# EV/EBITDA i zwrot z kapitału nie mają dla nich sensownej interpretacji.
+_MAGIC_EXCLUDED_SECTORS = {"Financial Services", "Utilities"}
+
+
+def _magic_eligible(r: ScreenerRow) -> bool:
+    return r.sector not in _MAGIC_EXCLUDED_SECTORS
+
+
 def _apply_magic_formula(rows: list[ScreenerRow]) -> list[ScreenerRow]:
     """
     Greenblatt Magic Formula: rank by Earnings Yield + Return on Capital.
     Earnings Yield = 1/EV_EBITDA (proxy EBIT/EV).
     Return on Capital = ROE (proxy).
     Final rank = rank_EY + rank_ROC (lower = better).
+    Spółki finansowe i utilities są wykluczone z rankingu (magic_rank = None).
     """
+    eligible = [(i, r) for i, r in enumerate(rows) if _magic_eligible(r)]
+
     # Ranking Earnings Yield (wyższy = lepszy → niższy rank)
-    with_ey = [(i, r) for i, r in enumerate(rows) if r.earnings_yield is not None]
+    with_ey = [(i, r) for i, r in eligible if r.earnings_yield is not None]
     with_ey.sort(key=lambda x: x[1].earnings_yield, reverse=True)  # type: ignore
     ey_ranks = {i: rank for rank, (i, _) in enumerate(with_ey, 1)}
 
     # Ranking ROE (wyższy = lepszy → niższy rank)
-    with_roe = [(i, r) for i, r in enumerate(rows) if r.roe is not None]
+    with_roe = [(i, r) for i, r in eligible if r.roe is not None]
     with_roe.sort(key=lambda x: x[1].roe, reverse=True)  # type: ignore
     roe_ranks = {i: rank for rank, (i, _) in enumerate(with_roe, 1)}
 
+    n = len(eligible)
     for i, r in enumerate(rows):
-        ey_r = ey_ranks.get(i, len(rows) + 1)
-        roe_r = roe_ranks.get(i, len(rows) + 1)
+        if not _magic_eligible(r):
+            r.magic_rank = None
+            continue
+        ey_r = ey_ranks.get(i, n + 1)
+        roe_r = roe_ranks.get(i, n + 1)
         r.magic_rank = ey_r + roe_r
 
     return rows

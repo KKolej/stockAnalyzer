@@ -97,6 +97,7 @@ def _fetch_one(ticker: str) -> ScreenerRow:
             fcf_yield=fcf_yield,
             earnings_yield=earnings_yield,
             interest_coverage=interest_coverage,
+            sector=info.get("sector"),
         )
     except Exception as e:
         return ScreenerRow(

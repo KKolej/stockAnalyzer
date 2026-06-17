@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import urllib.request
 from datetime import date
 
@@ -61,30 +60,29 @@ def _fetch_gold(data: MacroData) -> None:
 
 
 def _fetch_cpi(data: MacroData) -> None:
+    # UWAGA: /notowania/CPI to spółka giełdowa "CPI FIM SA", NIE wskaźnik inflacji.
+    # Inflacja jest w tabeli wskaźników makro, jako indeks 100+x (103.10 → +3.1% r/r).
     try:
         from bs4 import BeautifulSoup
         req = urllib.request.Request(
-            "https://www.biznesradar.pl/notowania/CPI",
-            headers=_HEADERS
+            "https://www.biznesradar.pl/wskazniki-makroekonomiczne/inflacja-cpi",
+            headers=_HEADERS,
         )
         with urllib.request.urlopen(req, timeout=8) as r:
             soup = BeautifulSoup(r.read(), "lxml")
 
-        p = soup.find(class_="profile_quotation")
-        if not p:
+        table = soup.find("table")
+        if not table:
             return
-        text = p.get_text(strip=True)
-        # Format: "66.30+1.40(+2.16%)25 maj 12:41"
-        m_val = re.match(r"([\d,\.]+)", text)
-        m_pct = re.search(r"\(([+\-][\d,\.]+)%\)", text)
-        m_date = re.search(r"(\d+ \w+ \d{2}:\d{2})", text)
-
-        if m_val:
-            data.cpi_value = float(m_val.group(1).replace(",", "."))
-        if m_pct:
-            data.cpi_change_pct = float(m_pct.group(1).replace(",", "."))
-        if m_date:
-            data.cpi_date = m_date.group(1)
+        for row in table.find_all("tr"):
+            cells = [c.get_text(strip=True) for c in row.find_all(["th", "td"])]
+            # ['Inflacja r/r (M)', '05.2026', '103.10', '-0.10']
+            if len(cells) >= 3 and cells[0].startswith("Inflacja r/r"):
+                index_val = float(cells[2].replace(",", "."))
+                data.cpi_value = index_val
+                data.cpi_change_pct = round(index_val - 100, 2)  # indeks → % r/r
+                data.cpi_date = cells[1]
+                break
     except Exception as e:
         data.errors.append(f"CPI: {e}")
 
