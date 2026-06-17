@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 
 from ...agents.fundamental.agent import get_data
+from ..schemas import FundamentalResponse
 from ..serializer import to_json
 
 router = APIRouter(prefix="/fundamental", tags=["fundamental"])
 
 
-@router.get("/{ticker}")
-async def fundamental(ticker: str) -> JSONResponse:
+@router.get("/{ticker}", response_model=FundamentalResponse)
+async def fundamental(ticker: str) -> FundamentalResponse:
     data, signals = get_data(ticker)
-    return JSONResponse(content=to_json({"data": data, "signals": signals}))
+    return FundamentalResponse.model_validate(to_json({"data": data, "signals": signals}))

@@ -21,8 +21,10 @@ Cena złota w PLN/g z NBP API.
 Źródło: `api.nbp.pl/api/cenyzlota/`
 
 ### Inflacja CPI
-Aktualny odczyt CPI (r/r %) z Biznesradaru.  
-Źródło: scraping `biznesradar.pl/notowania/CPI`
+Aktualny odczyt inflacji CPI (r/r %) z tabeli wskaźników makro Biznesradaru.
+Wartość podawana jest jako indeks (103.10 → +3.1% r/r).
+Źródło: scraping `biznesradar.pl/wskazniki-makroekonomiczne/inflacja-cpi`
+(uwaga: `/notowania/CPI` to spółka giełdowa „CPI FIM SA", **nie** inflacja)
 
 ### WIG20
 Aktualny poziom indeksu + zmiana 1D + pozycja w zakresie 52W.  
