@@ -52,6 +52,7 @@ inny wycinek analizy (techniczna, fundamentalna, wycena, sentyment itd.) i wysta
 | DCF | `GET /dcf/{t}` | wycena DCF (Base/Bull/Bear) |
 | Compare | `GET /compare?tickers=` | porównanie side-by-side |
 | Macro | `GET /macro` | NBP (waluty, złoto), CPI, WIG20, sektory |
+| Broker | `GET /broker/account`, `POST /broker/orders` | Alpaca: stan konta + egzekucja (paper/demo, rynki US) |
 | Analyze | `GET /analyze/{t}` | zbiorczy (istnieje, ale NIE jest kierunkiem — patrz wyżej) |
 
 ## Stack i komendy
@@ -81,6 +82,9 @@ inny wycinek analizy (techniczna, fundamentalna, wycena, sentyment itd.) i wysta
 - **DuPont**: dźwignia = aktywa/kapitał (z bilansu), NIE `ROE/(marża×rotacja)` (dawało <1).
 - **Magic Formula** wyklucza `Financial Services` i `Utilities` (Greenblatt).
 - Reddit zwraca 403 (blokuje scraping) — znane, sentyment leci z pozostałych źródeł.
+- **XTB nie ma już API** — `ws.xtb.com/demo` zwraca 404 (wyłączone 14.03.2025). NIE wpinać XTB.
+- **Broker = Alpaca** (zaimplementowany, `/broker/*`): darmowe, REST, paper/demo, ale tylko rynki US.
+  Domyślnie paper (`ALPACA_PAPER=1`). Dla GPW z egzekucją alternatywą byłby Interactive Brokers.
 - `docker exec python` ≠ venv aplikacji — apka działa przez `poetry run` (.venv).
 
 ## Konwencje pracy

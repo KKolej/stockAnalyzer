@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .routes import (
     analyze,
+    broker,
     compare,
     dcf,
     fundamental,
@@ -37,6 +38,7 @@ app.include_router(dcf.router)
 app.include_router(compare.router)
 app.include_router(macro.router)
 app.include_router(analyze.router)
+app.include_router(broker.router)
 
 
 @app.get("/health")
@@ -58,5 +60,8 @@ async def index() -> dict[str, dict[str, str]]:
             "GET /compare": "porównanie, ?tickers=CDR,PKO,KGHM",
             "GET /macro": "dane makro GPW (kursy walut, WIG20, sektory)",
             "GET /analyze/{ticker}": "ZBIORCZA analiza — wszyscy agenci + werdykt",
+            "GET /broker/account": "stan konta Alpaca (paper/demo)",
+            "GET /broker/positions": "otwarte pozycje",
+            "POST /broker/orders": "złóż zlecenie (paper)",
         }
     }

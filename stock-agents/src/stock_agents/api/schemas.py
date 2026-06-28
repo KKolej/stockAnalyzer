@@ -145,3 +145,55 @@ class FundamentalData(_Base):
 class FundamentalResponse(_Base):
     data: FundamentalData
     signals: list[FundamentalSignal] = []
+
+
+# ── Broker (Alpaca) ──────────────────────────────────────────────────────────
+class AccountResponse(_Base):
+    mode: str = Field(default="paper", description="paper (demo) | live")
+    status: str | None = None
+    currency: str | None = None
+    cash: str | None = None
+    equity: str | None = None
+    portfolio_value: str | None = None
+    buying_power: str | None = None
+    long_market_value: str | None = None
+    pattern_day_trader: bool | None = None
+    trading_blocked: bool | None = None
+
+
+class Position(_Base):
+    symbol: str
+    qty: str | None = None
+    side: str | None = None
+    avg_entry_price: str | None = None
+    current_price: str | None = None
+    market_value: str | None = None
+    unrealized_pl: str | None = None
+    unrealized_plpc: str | None = None
+
+
+class Order(_Base):
+    id: str | None = None
+    symbol: str | None = None
+    side: str | None = None
+    qty: str | None = None
+    notional: str | None = None
+    type: str | None = None
+    time_in_force: str | None = None
+    status: str | None = None
+    filled_qty: str | None = None
+    filled_avg_price: str | None = None
+    limit_price: str | None = None
+    submitted_at: str | None = None
+
+
+class OrderRequest(BaseModel):
+    """Ciało POST /broker/orders. Podaj `qty` ALBO `notional`."""
+    symbol: str = Field(description="np. AAPL, TSLA")
+    side: str = Field(description="buy | sell")
+    qty: float | None = Field(default=None, description="liczba akcji")
+    notional: float | None = Field(default=None, description="kwota w USD (zamiast qty)")
+    order_type: str = "market"
+    time_in_force: str = "day"
+    limit_price: float | None = None
+    stop_price: float | None = None

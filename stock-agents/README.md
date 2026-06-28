@@ -15,6 +15,7 @@ System agentów do analizy giełdowej (GPW + rynki zagraniczne). Działa jako CL
 | **DCF** | `dcf-agents CDR` | `GET /dcf/CDR` | Wycena DCF (Base / Bull / Bear) |
 | **Compare** | `compare-agents CDR PKO KGHM` | `GET /compare?tickers=CDR,PKO,KGHM` | Porównanie side-by-side |
 | **Macro** | `macro-agents` | `GET /macro` | WIG20, waluty NBP, sektory GPW |
+| **Broker** | — | `GET /broker/account`, `POST /broker/orders` | Alpaca: stan konta + egzekucja (paper/demo) |
 
 ## Szybki start
 
@@ -94,6 +95,8 @@ poetry run macro-agents
 | `API_PORT` | `8000` | Port serwera |
 | `CACHE_TTL` | `900` | Czas życia cache (s) dla pobrań rynkowych — ważne w chmurze |
 | `CACHE_ENABLED` | `1` | `0` wyłącza cache TTL |
+| `ALPACA_API_KEY` / `ALPACA_API_SECRET` | *(opcjonalne)* | Klucze Alpaca — endpointy `/broker/*` |
+| `ALPACA_PAPER` | `1` | `1` = konto demo (paper), `0` = real |
 
 ## Tickery
 
