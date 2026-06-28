@@ -197,3 +197,198 @@ class OrderRequest(BaseModel):
     time_in_force: str = "day"
     limit_price: float | None = None
     stop_price: float | None = None
+
+
+# ── DCF ──────────────────────────────────────────────────────────────────────
+class DCFScenario(_Base):
+    name: str = Field(description="Base | Bull | Bear")
+    fcf_growth: float = Field(description="roczny wzrost FCF w fazie 1 (ułamek)")
+    terminal_growth: float = Field(description="wzrost terminalny (ułamek)")
+    wacc: float = Field(description="stopa dyskontowa")
+    fair_value: float | None = None
+    upside: float | None = Field(default=None, description="fair_value / price - 1")
+
+
+class DCFResponse(_Base):
+    ticker: str
+    company: str | None = None
+    currency: str | None = None
+    price: float | None = None
+    shares: float | None = Field(default=None, description="liczba akcji (szt.)")
+    fcf_ttm: float | None = Field(default=None, description="FCF za 12M")
+    net_debt: float | None = None
+    wacc_base: float | None = None
+    projection_years: int | None = None
+    scenarios: list[DCFScenario] = []
+    available: bool | None = None
+    error: str | None = None
+
+
+# ── Speculator ───────────────────────────────────────────────────────────────
+class Catalyst(_Base):
+    name: str
+    event_date: str | None = Field(default=None, description="ISO date")
+    days_away: int | None = None
+    description: str | None = None
+
+
+class PatternResult(_Base):
+    name: str
+    direction: str = Field(description="UP | DOWN | NEUTRAL")
+    strength: str = Field(description="strong | medium | weak")
+    probability: float = Field(description="0.0–1.0 z danych historycznych")
+    sample_size: int = Field(description="liczba obserwacji")
+    avg_return: float | None = None
+    horizon_days: int | None = None
+    note: str | None = None
+
+
+class Projection(_Base):
+    horizon_label: str
+    horizon_days: int
+    direction: str = Field(description="UP | DOWN | NEUTRAL")
+    return_low: float
+    return_high: float
+    probability: float
+    reasoning: str | None = None
+
+
+class SpeculatorResponse(_Base):
+    ticker: str
+    company: str | None = None
+    current_price: float | None = None
+    currency: str | None = None
+    catalysts: list[Catalyst] = []
+    patterns: list[PatternResult] = []
+    projections: list[Projection] = []
+    error: str | None = None
+
+
+# ── Screener ─────────────────────────────────────────────────────────────────
+class ScreenerRow(_Base):
+    ticker: str
+    company: str | None = None
+    price: float | None = None
+    currency: str | None = None
+    market_cap: float | None = None
+    pe: float | None = None
+    pb: float | None = None
+    ps: float | None = None
+    roe: float | None = None
+    roa: float | None = None
+    profit_margin: float | None = None
+    dividend_yield: float | None = None
+    debt_to_equity: float | None = None
+    week_52_change: float | None = None
+    beta: float | None = None
+    fcf_yield: float | None = None
+    interest_coverage: float | None = None
+    earnings_yield: float | None = Field(default=None, description="EBIT/EV (Magic Formula)")
+    sector: str | None = None
+    magic_rank: int | None = Field(default=None, description="ranking Magic Formula (niższy = lepszy)")
+    available: bool | None = None
+    error: str | None = None
+
+
+class ScreenerResponse(_Base):
+    total: int = Field(description="liczba przeanalizowanych spółek")
+    matched: int = Field(description="liczba spełniających filtry")
+    filters: dict[str, object] = {}
+    rows: list[ScreenerRow] = []
+    errors: list[ScreenerRow] = []
+
+
+# ── Sentiment ────────────────────────────────────────────────────────────────
+class Mention(_Base):
+    source: str
+    title: str | None = None
+    url: str | None = None
+    date: str | None = Field(default=None, description="ISO datetime")
+    score: float
+    label: str = Field(description="BULLISH | BEARISH | NEUTRAL")
+
+
+class SourceResult(_Base):
+    name: str
+    mentions: list[Mention] = []
+    available: bool | None = None
+    bullish_count: int | None = None
+    bearish_count: int | None = None
+    neutral_count: int | None = None
+    avg_score: float | None = None
+    error: str | None = None
+
+
+class SentimentResponse(_Base):
+    ticker: str
+    company: str | None = None
+    mode: str = Field(description="keyword | claude")
+    results: list[SourceResult] = []
+    total_mentions: int | None = None
+    overall_score: float | None = None
+    overall_label: str | None = Field(default=None, description="BULLISH | BEARISH | NEUTRAL")
+
+
+# ── Macro ────────────────────────────────────────────────────────────────────
+class FxRate(_Base):
+    code: str = Field(description="USD | EUR | CHF | GBP")
+    name: str | None = None
+    rate: float = Field(description="PLN za 1 jednostkę")
+    date: str | None = None
+    change_3m: float | None = Field(default=None, description="% zmiana 3M")
+
+
+class SectorPerf(_Base):
+    name: str
+    symbol: str
+    price: float | None = None
+    change_1d: float | None = Field(default=None, description="% zmiana 1D")
+    pos_52w: float | None = Field(default=None, description="pozycja w zakresie 52W (0-100%)")
+
+
+class MacroResponse(_Base):
+    as_of: str | None = Field(default=None, description="ISO date")
+    fx: list[FxRate] = []
+    gold_pln: float | None = None
+    gold_date: str | None = None
+    wig20_price: float | None = None
+    wig20_change_1d: float | None = None
+    wig20_pos_52w: float | None = None
+    sectors: list[SectorPerf] = []
+    cpi_value: float | None = None
+    cpi_change_pct: float | None = Field(default=None, description="inflacja YoY %")
+    cpi_date: str | None = None
+    errors: list[str] = []
+
+
+# ── Compare ──────────────────────────────────────────────────────────────────
+class CompareRow(_Base):
+    ticker: str
+    company: str | None = None
+    currency: str | None = None
+    price: float | None = None
+    market_cap: float | None = None
+    pe: float | None = None
+    pe_fwd: float | None = None
+    pb: float | None = None
+    ps: float | None = None
+    ev_ebitda: float | None = None
+    roe: float | None = None
+    roa: float | None = None
+    margin: float | None = None
+    op_margin: float | None = None
+    div_yield: float | None = None
+    debt_equity: float | None = None
+    beta: float | None = None
+    fcf: float | None = None
+    revenue: float | None = None
+    w52_high: float | None = None
+    w52_low: float | None = None
+    interest_coverage: float | None = None
+    sector: str | None = None
+    error: str | None = None
+
+
+class CompareResponse(_Base):
+    tickers: list[str] = []
+    data: list[CompareRow] = []

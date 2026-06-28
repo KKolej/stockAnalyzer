@@ -34,7 +34,9 @@ inny wycinek analizy (techniczna, fundamentalna, wycena, sentyment itd.) i wysta
 ### Pomysły na rozwój „dla lepszych wyników" (kolejność)
 1. **Reliability per sygnał (backtest)** — dołączać do sygnałów hit-rate/IC, żeby LLM
    wiedział, którym ufać. (Backtestu jeszcze NIE ma — to największa dźwignia jakości.)
-2. **Response models na pozostałych 6 endpointach** (wzorzec gotowy: technical, fundamental).
+2. ~~Response models na pozostałych endpointach~~ **ZROBIONE** — wszystkie endpointy danych
+   mają `response_model` (technical, fundamental, dcf, speculator, screener, sentiment, macro,
+   compare, broker). Bez modelu został tylko `/analyze` (świadomie — endpoint syntezy, nie kierunek).
 3. **Drugie źródło GPW (Stooq)** — pełna historia (yfinance daje 1 dzień dla indeksów PL)
    + cross-check danych.
 4. **Quality/source flags na wszystkich endpointach.**

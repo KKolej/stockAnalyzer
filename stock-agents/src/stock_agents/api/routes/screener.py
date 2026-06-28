@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Query
-from fastapi.responses import JSONResponse
 
 from ...agents.screener.agent import get_data
 from ...agents.screener.models import ScreenerFilters
+from ..schemas import ScreenerResponse
 from ..serializer import to_json
 
 router = APIRouter(prefix="/screener", tags=["screener"])
@@ -16,7 +16,7 @@ _DEFAULT_TICKERS = [
 ]
 
 
-@router.get("")
+@router.get("", response_model=ScreenerResponse)
 async def screener(
     tickers: str = Query(default=",".join(_DEFAULT_TICKERS), description="Tickery oddzielone przecinkiem"),
     pe_max: float | None = None,
@@ -32,7 +32,7 @@ async def screener(
     sort_by: str = Query(default="pe", description="pe|pb|roe|margin|div|ic|cap"),
     top: int | None = Query(default=None, ge=1, le=50),
     magic_formula: bool = False,
-) -> JSONResponse:
+) -> ScreenerResponse:
     ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
     filters = ScreenerFilters(
         pe_max=pe_max, pe_min=pe_min, pb_max=pb_max,
@@ -41,7 +41,7 @@ async def screener(
         debt_max=debt_max, sort_by=sort_by, top=top, magic_formula=magic_formula,
     )
     all_rows, filtered = get_data(ticker_list, filters)
-    return JSONResponse(content=to_json({
+    return ScreenerResponse.model_validate(to_json({
         "total": len(all_rows),
         "matched": len(filtered),
         "filters": filters,

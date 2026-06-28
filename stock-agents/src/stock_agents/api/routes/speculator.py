@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
 
 from ...agents.speculator.agent import get_data
+from ..schemas import SpeculatorResponse
 from ..serializer import to_json
 
 router = APIRouter(prefix="/speculator", tags=["speculator"])
 
 
-@router.get("/{ticker}")
-async def speculator(ticker: str) -> JSONResponse:
+@router.get("/{ticker}", response_model=SpeculatorResponse)
+async def speculator(ticker: str) -> SpeculatorResponse:
     data = get_data(ticker)
-    return JSONResponse(content=to_json(data))
+    return SpeculatorResponse.model_validate(to_json(data))

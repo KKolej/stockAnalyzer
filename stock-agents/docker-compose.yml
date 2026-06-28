@@ -16,3 +16,25 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+
+  # n8n — orkiestrator: odpytuje endpointy stock-api i przepuszcza dane przez LLM.
+  # W tej samej sieci compose n8n dobija się do API po nazwie serwisu: http://stock-api:8000
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      # localhost po HTTP — bez tego logowanie potrafi się wykrzaczyć na "secure cookie"
+      N8N_SECURE_COOKIE: "false"
+      GENERIC_TIMEZONE: "Europe/Warsaw"
+      TZ: "Europe/Warsaw"
+      # opcjonalnie: klucz z .env (i tak credential do Anthropic ustawiasz w UI n8n)
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      - stock-api
+    restart: unless-stopped
+
+volumes:
+  n8n_data:
