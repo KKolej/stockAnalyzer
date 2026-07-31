@@ -19,7 +19,7 @@ def get_data(ticker: str) -> SpeculatorData:
     except Exception as e:
         return SpeculatorData(ticker=ticker, company=company, current_price=0.0, currency="", error=str(e))
 
-    patterns, catalysts = run_all_patterns(yahoo_ticker, ticker)
+    patterns, catalysts = run_all_patterns(yahoo_ticker, ticker, industry=info.get("industry"))
     projections = build_projections(patterns, catalysts)
     return SpeculatorData(
         ticker=ticker.upper(), company=company,

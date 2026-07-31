@@ -33,19 +33,19 @@ def _passes(row: ScreenerRow, f: ScreenerFilters) -> bool:
         ok_max(row.pe, f.pe_max),
         ok_min(row.pe, f.pe_min),
         ok_max(row.pb, f.pb_max),
-        ok_min(row.roe * 100 if row.roe else None, f.roe_min),
-        ok_min(row.roa * 100 if row.roa else None, f.roa_min),
-        ok_min(row.profit_margin * 100 if row.profit_margin else None, f.margin_min),
-        ok_min(row.dividend_yield * 100 if row.dividend_yield else None, f.div_min),
+        ok_min(row.roe * 100 if row.roe is not None else None, f.roe_min),
+        ok_min(row.roa * 100 if row.roa is not None else None, f.roa_min),
+        ok_min(row.profit_margin * 100 if row.profit_margin is not None else None, f.margin_min),
+        ok_min(row.dividend_yield * 100 if row.dividend_yield is not None else None, f.div_min),
         ok_max(row.debt_to_equity, f.debt_max),
         ok_max(row.beta, f.beta_max),
-        ok_min(row.fcf_yield * 100 if row.fcf_yield else None, f.fcf_yield_min),
+        ok_min(row.fcf_yield * 100 if row.fcf_yield is not None else None, f.fcf_yield_min),
         ok_min(row.interest_coverage, f.ic_min),
     ]
     if f.market_cap_min is not None:
-        checks.append(ok_min(row.market_cap / 1e6 if row.market_cap else None, f.market_cap_min))
+        checks.append(ok_min(row.market_cap / 1e6 if row.market_cap is not None else None, f.market_cap_min))
     if f.market_cap_max is not None:
-        checks.append(ok_max(row.market_cap / 1e6 if row.market_cap else None, f.market_cap_max))
+        checks.append(ok_max(row.market_cap / 1e6 if row.market_cap is not None else None, f.market_cap_max))
 
     return all(checks)
 

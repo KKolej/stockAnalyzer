@@ -550,7 +550,7 @@ files = [
 name = "httpcore"
 version = "1.0.9"
 description = "A minimal low-level HTTP client."
-optional = true
+optional = false
 python-versions = ">=3.8"
 files = [
     {file = "httpcore-1.0.9-py3-none-any.whl", hash = "sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55"},
@@ -630,7 +630,7 @@ files = [
 name = "httpx"
 version = "0.28.1"
 description = "The next generation HTTP client."
-optional = true
+optional = false
 python-versions = ">=3.8"
 files = [
     {file = "httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad"},
@@ -2361,4 +2361,4 @@ claude = ["anthropic"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "14b03f5dc67adfd4fffc703fdbe6f8d646dba99eda555fa4ba11c037b76ab569"
+content-hash = "518256ff2d7cd30f09faced5aba30b6babfeb9e7af0149750499339cf4a27c4e"

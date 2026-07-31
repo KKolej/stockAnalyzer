@@ -10,6 +10,6 @@ router = APIRouter(prefix="/fundamental", tags=["fundamental"])
 
 
 @router.get("/{ticker}", response_model=FundamentalResponse)
-async def fundamental(ticker: str) -> FundamentalResponse:
+def fundamental(ticker: str) -> FundamentalResponse:
     data, signals = get_data(ticker)
     return FundamentalResponse.model_validate(to_json({"data": data, "signals": signals}))

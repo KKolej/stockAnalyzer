@@ -11,7 +11,7 @@ router = APIRouter(prefix="/analyze", tags=["analyze"])
 
 
 @router.get("/{ticker}")
-async def analyze_ticker(
+def analyze_ticker(
     ticker: str,
     days: int = Query(default=180, ge=30, le=1000),
     sentiment_mode: str = Query(default="keyword", description="keyword|claude"),

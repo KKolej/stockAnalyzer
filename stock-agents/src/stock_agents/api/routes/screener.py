@@ -17,7 +17,7 @@ _DEFAULT_TICKERS = [
 
 
 @router.get("", response_model=ScreenerResponse)
-async def screener(
+def screener(
     tickers: str = Query(default=",".join(_DEFAULT_TICKERS), description="Tickery oddzielone przecinkiem"),
     pe_max: float | None = None,
     pe_min: float | None = None,

@@ -2,7 +2,8 @@ services:
   stock-api:
     build: .
     ports:
-      - "${API_PORT:-8000}:8000"
+      # na serwerze ustaw API_BIND=127.0.0.1 — API nie musi być publiczne (n8n łączy się po sieci compose)
+      - "${API_BIND:-0.0.0.0}:${API_PORT:-8000}:8000"
     env_file:
       - .env
     environment:
@@ -24,14 +25,23 @@ services:
     ports:
       - "${N8N_PORT:-5678}:5678"
     environment:
+      # lokalnie, jednoosobowo — wyłącz logowanie/rejestrację (zero loginu po restarcie).
+      # NA SERWERZE (Mikrus itp.) ustaw w .env: N8N_USER_MANAGEMENT_DISABLED=false !
+      N8N_USER_MANAGEMENT_DISABLED: "${N8N_USER_MANAGEMENT_DISABLED:-true}"
       # localhost po HTTP — bez tego logowanie potrafi się wykrzaczyć na "secure cookie"
-      N8N_SECURE_COOKIE: "false"
+      N8N_SECURE_COOKIE: "${N8N_SECURE_COOKIE:-false}"
+      # na serwerze: publiczny adres n8n (np. https://twojvps.wykr.es:PORT) — patrz DEPLOYMENT.md
+      WEBHOOK_URL: "${N8N_WEBHOOK_URL:-}"
       GENERIC_TIMEZONE: "Europe/Warsaw"
       TZ: "Europe/Warsaw"
       # opcjonalnie: klucz z .env (i tak credential do Anthropic ustawiasz w UI n8n)
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
     volumes:
       - n8n_data:/home/node/.n8n
+    # dostęp do usług na hoście (np. scripts/claude_proxy.py — claude -p z subskrypcji,
+    # bez płatnego API) pod nazwą host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - stock-api
     restart: unless-stopped

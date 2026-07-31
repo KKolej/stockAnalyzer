@@ -10,6 +10,6 @@ router = APIRouter(prefix="/technical", tags=["technical"])
 
 
 @router.get("/{ticker}", response_model=TechnicalResponse)
-async def technical(ticker: str, days: int = Query(default=90, ge=10, le=1000)) -> TechnicalResponse:
+def technical(ticker: str, days: int = Query(default=90, ge=10, le=1000)) -> TechnicalResponse:
     data = get_data(ticker, days)
     return TechnicalResponse.model_validate(to_json(data))

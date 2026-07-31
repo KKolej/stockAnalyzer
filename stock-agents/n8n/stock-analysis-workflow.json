@@ -1,0 +1,280 @@
+{
+  "id": "StockAgentsLocal01",
+  "name": "Stock Analysis (stock-agents)",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "chat-trigger",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [-220, 300],
+      "webhookId": "stock-analysis-chat"
+    },
+    {
+      "parameters": {
+        "promptType": "auto",
+        "options": {
+          "systemMessage": "Jesteś analitykiem giełdowym (GPW + rynki zagraniczne). Użytkownik podaje ticker, np. CDR, PKO, KGHM albo TSLA.US (zagraniczne mają sufiks .US; GPW bez sufiksu).\n\nDla podanego tickera ZAWSZE pobierz dane ze WSZYSTKICH narzędzi: Technical, Fundamental, DCF, Speculator, Sentiment, oraz Macro (kontekst rynku, bez tickera). Nie pomijaj żadnego narzędzia.\n\nNarzędzia zwracają SUROWE, ustrukturyzowane dane (to dostawca danych — nie analityk). Twoim zadaniem jest SYNTEZA. Jeśli endpoint zwróci pole \"error\" albo brak danych — odnotuj to wprost i nie zmyślaj liczb.\n\nZwróć zwięzłą analizę PO POLSKU w sekcjach:\n1. Werdykt (jedno zdanie: bullish / neutralny / bearish + krótkie uzasadnienie)\n2. Technika (trend, kluczowe wskaźniki, wsparcia/opory, ryzyko: Sharpe/DD/beta)\n3. Fundamenty (wycena: P/E, P/B; jakość: ROE/ROIC, Piotroski, Altman Z; FCF)\n4. Wycena DCF (fair value Base/Bull/Bear vs cena, upside)\n5. Spekulacja / katalizatory (wzorce, nadchodzące zdarzenia)\n6. Sentyment (ogólny wydźwięk + źródła)\n7. Kontekst makro (waluty, inflacja, WIG20, sektory)\n8. Główne ryzyka\n\nNie podawaj porad inwestycyjnych jako pewników — to analiza danych, nie rekomendacja."
+        }
+      },
+      "id": "ai-agent",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [120, 300]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-sonnet-5"
+        },
+        "options": {}
+      },
+      "id": "anthropic-model",
+      "name": "Anthropic Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [40, 540]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Analiza techniczna spółki: 22 wskaźniki (RSI, MACD, SMA/EMA...), wsparcie/opór, ryzyko (Sharpe/Sortino/drawdown/beta), sygnały i score. Parametr ticker wymagany.",
+        "url": "http://stock-api:8000/technical/{ticker}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "ticker",
+              "description": "Symbol spółki, np. CDR, PKO, TSLA.US",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "tool-technical",
+      "name": "Technical",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [320, 540]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Analiza fundamentalna: P/E, P/B, P/S, EV/EBITDA, ROE/ROA/ROIC, marże, FCF, Piotroski F-Score, Altman Z, DuPont, dywidenda, historia. Parametr ticker wymagany.",
+        "url": "http://stock-api:8000/fundamental/{ticker}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "ticker",
+              "description": "Symbol spółki, np. CDR, PKO, TSLA.US",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "tool-fundamental",
+      "name": "Fundamental",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [440, 540]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Wycena DCF (zdyskontowane przepływy): fair value w scenariuszach Base/Bull/Bear, WACC, FCF TTM, dług netto, upside vs cena. Parametr ticker wymagany.",
+        "url": "http://stock-api:8000/dcf/{ticker}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "ticker",
+              "description": "Symbol spółki, np. CDR, PKO, TSLA.US",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "tool-dcf",
+      "name": "DCF",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [560, 540]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Analiza spekulacyjna: wzorce sezonowe/zdarzeniowe, katalizatory (earnings, dywidenda), projekcje krótkoterminowe z prawdopodobieństwami. Parametr ticker wymagany.",
+        "url": "http://stock-api:8000/speculator/{ticker}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "ticker",
+              "description": "Symbol spółki, np. CDR, PKO, TSLA.US",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "tool-speculator",
+      "name": "Speculator",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [680, 540]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Sentyment rynkowy: wzmianki i wydźwięk z Bankier, Stockwatch, Google News (BULLISH/BEARISH/NEUTRAL, score zbiorczy). Parametr ticker wymagany.",
+        "url": "http://stock-api:8000/sentiment/{ticker}",
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "ticker",
+              "description": "Symbol spółki, np. CDR, PKO, TSLA.US",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "id": "tool-sentiment",
+      "name": "Sentiment",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [800, 540]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Kontekst makro (BEZ tickera): kursy walut NBP (USD/EUR/CHF/GBP/PLN), złoto, inflacja CPI YoY, WIG20, wyniki sektorów GPW. Wywołuj bez parametrów.",
+        "url": "http://stock-api:8000/macro"
+      },
+      "id": "tool-macro",
+      "name": "Macro",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [920, 540]
+    },
+    {
+      "parameters": {
+        "fromEmail": "TWOJE-KONTO-WYSYLKOWE@gmail.com",
+        "toEmail": "b.kolej@gmail.com",
+        "subject": "=Analiza: {{ $('When chat message received').item.json.chatInput }}",
+        "emailFormat": "text",
+        "text": "={{ $json.output }}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [420, 300]
+    }
+  ],
+  "connections": {
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Technical": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fundamental": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DCF": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Speculator": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sentiment": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Macro": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "meta": {
+    "templateId": "stock-agents-local"
+  }
+}

@@ -10,6 +10,7 @@ import pandas as pd
 import yfinance as yf
 
 from ...ticker_map import is_gpw
+from .gaming_events import gaming_event_catalysts, is_gaming_company
 from .models import Catalyst, PatternResult
 
 _MIN_SAMPLE = 3
@@ -529,7 +530,9 @@ def get_catalysts(yahoo_ticker: str) -> list[Catalyst]:
 
 # ── Główna funkcja ────────────────────────────────────────────────────────────
 
-def run_all_patterns(yahoo_ticker: str, ticker: str) -> tuple[list[PatternResult], list[Catalyst]]:
+def run_all_patterns(
+    yahoo_ticker: str, ticker: str, industry: str | None = None,
+) -> tuple[list[PatternResult], list[Catalyst]]:
     df = _fetch_price_history(yahoo_ticker)
     if df.empty:
         return [], []
@@ -542,6 +545,9 @@ def run_all_patterns(yahoo_ticker: str, ticker: str) -> tuple[list[PatternResult
     sector_name = sector_ticker.replace(".WA", "") if sector_ticker else "sektor"
 
     catalysts = get_catalysts(yahoo_ticker)
+    if is_gaming_company(ticker, industry):
+        catalysts.extend(gaming_event_catalysts())
+        catalysts.sort(key=lambda c: c.days_away)
 
     try:
         raw_divs = yf.Ticker(yahoo_ticker).dividends

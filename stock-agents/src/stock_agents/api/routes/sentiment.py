@@ -11,7 +11,7 @@ router = APIRouter(prefix="/sentiment", tags=["sentiment"])
 
 
 @router.get("/{ticker}", response_model=SentimentResponse)
-async def sentiment(
+def sentiment(
     ticker: str,
     mode: str = Query(default="keyword", description="keyword|claude"),
 ) -> SentimentResponse:

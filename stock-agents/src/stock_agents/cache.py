@@ -44,11 +44,15 @@ def ttl_cache(ttl: int = DEFAULT_TTL) -> Callable[[F], F]:
             now = time.monotonic()
             with _LOCK:
                 hit = _CACHE.get(key)
-                if hit is not None and now - hit[0] < ttl:
+                if hit is not None and now < hit[0]:
                     return _copy(hit[1])
             result = fn(*args, **kwargs)
             with _LOCK:
-                _CACHE[key] = (now, _copy(result))
+                # usuń przeterminowane wpisy, żeby cache nie rósł bez ograniczeń
+                expired = [k for k, (exp, _) in _CACHE.items() if now >= exp]
+                for k in expired:
+                    del _CACHE[k]
+                _CACHE[key] = (now + ttl, _copy(result))
             return result
 
         return wrapper  # type: ignore[return-value]

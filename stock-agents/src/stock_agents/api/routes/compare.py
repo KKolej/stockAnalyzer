@@ -13,7 +13,7 @@ router = APIRouter(prefix="/compare", tags=["compare"])
 
 
 @router.get("", response_model=CompareResponse)
-async def compare(
+def compare(
     tickers: str = Query(description="Tickery oddzielone przecinkiem, np. CDR,PKO,KGHM"),
 ) -> CompareResponse | JSONResponse:
     ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]

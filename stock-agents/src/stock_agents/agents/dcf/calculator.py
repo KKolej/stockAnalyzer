@@ -73,10 +73,10 @@ def build_scenarios(result: DCFResult, beta: float | None,
     for name, g, tg, dw in scenario_params:
         w = round(wacc + dw, 4)
         fv = _dcf_value(fcf, g, tg, w, years, nd, shares)
-        upside = (fv / price - 1) if fv and price > 0 else None
+        upside = (fv / price - 1) if fv is not None and price > 0 else None
         scenarios.append(DCFScenario(
             name=name, fcf_growth=g, terminal_growth=tg, wacc=w,
-            fair_value=round(fv, 2) if fv else None,
+            fair_value=round(fv, 2) if fv is not None else None,
             upside=round(upside, 4) if upside is not None else None,
         ))
 
