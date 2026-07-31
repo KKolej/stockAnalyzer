@@ -2,7 +2,7 @@
 
 Ceny spółek gamingowych często rosną PRZED dużymi targami (zapowiedzi, trailery,
 pokazy wydawców) — run-up budowany tygodnie wcześniej. Ten moduł dokłada targi
-do listy katalizatorów spekulanta dla spółek z branży.
+do listy katalizatorów spekulanta dla spółek wykrytych po `industry` z yfinance.
 
 UWAGA: daty trzeba raz w roku odświeżyć (oficjalne strony wydarzeń).
 Daty oznaczone "orientacyjna" bazują na typowym terminie z lat ubiegłych.
@@ -13,17 +13,9 @@ from datetime import date
 
 from .models import Catalyst
 
-# Spółki gamingowe: GPW (kod bez sufiksu) + zagraniczne (sufiks .US).
-# Uzupełniane o wykrywanie po yfinance `industry` (patrz is_gaming_company).
-GAMING_TICKERS: set[str] = {
-    # GPW
-    "CDR", "11B", "TEN", "PLW", "CRJ", "BLO", "HUU", "VVD", "GOP",
-    "MOV", "ALL", "CIG", "BBT", "PCF", "DTR", "ULG",
-    # zagraniczne
-    "TTWO.US", "EA.US", "RBLX.US", "U.US", "NTDOY.US", "SONY.US",
-}
-
-_GAMING_INDUSTRY_KEYWORDS = ("gaming", "electronic gaming", "multimedia")
+# Wykrywanie po yfinance `industry` — Yahoo klasyfikuje spółki gamingowe
+# (również GPW) jako "Electronic Gaming & Multimedia".
+_GAMING_INDUSTRY_KEYWORDS = ("gaming", "video game")
 
 # (nazwa, data startu, opis) — opis krótki, trafia do LLM-a przez API
 GAMING_EVENTS: list[tuple[str, date, str]] = [
@@ -48,13 +40,46 @@ GAMING_EVENTS: list[tuple[str, date, str]] = [
 ]
 
 
-def is_gaming_company(ticker: str, industry: str | None = None) -> bool:
-    if ticker.upper() in GAMING_TICKERS:
-        return True
-    if industry:
-        low = industry.lower()
-        return any(kw in low for kw in _GAMING_INDUSTRY_KEYWORDS)
-    return False
+# Historyczne daty startu powtarzalnych targów — do backtestu run-upu
+# (dokładność ±1-2 dni nie ma znaczenia przy oknie 30-dniowym).
+EVENT_HISTORY: dict[str, list[date]] = {
+    "Gamescom": [
+        date(2018, 8, 21), date(2019, 8, 20), date(2020, 8, 27),
+        date(2021, 8, 25), date(2022, 8, 24), date(2023, 8, 23),
+        date(2024, 8, 21), date(2025, 8, 20), date(2026, 8, 26),
+    ],
+    "Tokyo Game Show": [
+        date(2018, 9, 20), date(2019, 9, 12), date(2020, 9, 23),
+        date(2021, 9, 30), date(2022, 9, 15), date(2023, 9, 21),
+        date(2024, 9, 26), date(2025, 9, 25), date(2026, 9, 24),
+    ],
+    "The Game Awards": [
+        date(2018, 12, 6), date(2019, 12, 12), date(2020, 12, 10),
+        date(2021, 12, 9), date(2022, 12, 8), date(2023, 12, 7),
+        date(2024, 12, 12), date(2025, 12, 11), date(2026, 12, 10),
+    ],
+}
+
+
+def upcoming_recurring_events(today: date | None = None, window_days: int = 120) -> list[tuple[str, date, list[date]]]:
+    """Powtarzalne targi w nadchodzącym oknie + ich daty historyczne (do backtestu)."""
+    today = today or date.today()
+    out: list[tuple[str, date, list[date]]] = []
+    for name, dates in EVENT_HISTORY.items():
+        future = [d for d in dates if 0 <= (d - today).days <= window_days]
+        if not future:
+            continue
+        next_date = min(future)
+        past = [d for d in dates if d < today]
+        out.append((name, next_date, past))
+    return out
+
+
+def is_gaming_company(industry: str | None) -> bool:
+    if not industry:
+        return False
+    low = industry.lower()
+    return any(kw in low for kw in _GAMING_INDUSTRY_KEYWORDS)
 
 
 def gaming_event_catalysts(today: date | None = None) -> list[Catalyst]:

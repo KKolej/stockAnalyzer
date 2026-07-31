@@ -10,7 +10,7 @@ import pandas as pd
 import yfinance as yf
 
 from ...ticker_map import is_gpw
-from .gaming_events import gaming_event_catalysts, is_gaming_company
+from .gaming_events import gaming_event_catalysts, is_gaming_company, upcoming_recurring_events
 from .models import Catalyst, PatternResult
 
 _MIN_SAMPLE = 3
@@ -316,6 +316,55 @@ def analyze_seasonality(df: pd.DataFrame) -> PatternResult | None:
     )
 
 
+# ── Run-up przed targami gier (backtest, tylko spółki gamingowe) ─────────────
+
+def analyze_gaming_event_runup(df: pd.DataFrame, today: date | None = None) -> list[PatternResult]:
+    """Backtest run-upu przed powtarzalnymi targami (Gamescom, TGS, TGA).
+
+    Dla każdych nadchodzących targów liczy z historii spółki zwrot w oknie
+    30 dni PRZED datą targów w poprzednich latach. Sygnał NEUTRAL też jest
+    emitowany — informacja "run-up historycznie nie występował" tonuje
+    katalizator i jest cenna dla LLM-a.
+    """
+    results: list[PatternResult] = []
+    if df.empty:
+        return results
+    today = today or date.today()
+
+    for name, next_date, past_dates in upcoming_recurring_events(today):
+        returns = []
+        for d in past_dates:
+            r = _price_return(df, d, -30, -1)
+            if r is not None:
+                returns.append(r)
+        if len(returns) < _MIN_SAMPLE:
+            continue
+
+        positive = sum(1 for r in returns if r > 0)
+        prob = positive / len(returns)
+        avg = sum(returns) / len(returns)
+        days_away = (next_date - today).days
+
+        if abs(prob - 0.5) < 0.15:
+            direction, strength = "NEUTRAL", "weak"
+            note = (f"Brak wyraźnego run-upu przed {name} (up w {positive}/{len(returns)} lat, "
+                    f"avg {avg*100:+.1f}%) — najbliższe targi za {days_away}d")
+        else:
+            direction = "UP" if prob >= 0.5 else "DOWN"
+            strength = "strong" if (prob >= 0.75 or prob <= 0.25) else "medium"
+            note = (f"Run-up 30d przed {name}: up w {positive}/{len(returns)} lat "
+                    f"(avg {avg*100:+.1f}%) — najbliższe targi za {days_away}d")
+
+        results.append(PatternResult(
+            name=f"Run-up przed targami ({name})",
+            direction=direction, strength=strength, probability=prob,
+            sample_size=len(returns), avg_return=avg,
+            horizon_days=max(days_away, 1), note=note,
+        ))
+
+    return results
+
+
 # ── Rekomendacje analityków (Biznesradar) ────────────────────────────────────
 
 def analyze_analyst_recommendations(ticker: str) -> PatternResult | None:
@@ -545,7 +594,8 @@ def run_all_patterns(
     sector_name = sector_ticker.replace(".WA", "") if sector_ticker else "sektor"
 
     catalysts = get_catalysts(yahoo_ticker)
-    if is_gaming_company(ticker, industry):
+    gaming = is_gaming_company(industry)
+    if gaming:
         catalysts.extend(gaming_event_catalysts())
         catalysts.sort(key=lambda c: c.days_away)
 
@@ -578,6 +628,9 @@ def run_all_patterns(
     seasonal = analyze_seasonality(df)
     if seasonal:
         patterns.append(seasonal)
+
+    if gaming:
+        patterns.extend(analyze_gaming_event_runup(df))
 
     if gpw:
         rec = analyze_analyst_recommendations(ticker)
