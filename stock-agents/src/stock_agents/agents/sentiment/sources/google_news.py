@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 
 from ..models import Mention, SentimentLabel, SourceResult
 
 _RSS_URL = "https://news.google.com/rss/search?q={query}&hl={lang}&gl={country}&ceid={ceid}"
+# Google News RSS bywa kapryśne bez User-Agenta przeglądarki.
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120 Safari/537.36",
+}
 
 
 def _make_url(query: str, lang: str, country: str, ceid: str) -> str:
@@ -26,18 +33,25 @@ def _parse_date(text: str) -> datetime | None:
 
 
 def _fetch_feed(url: str) -> list[Mention]:
+    """Pobiera i parsuje RSS Google News czystym stdlib (bez zależności feedparser).
+
+    Wcześniej używaliśmy `feedparser`, którego NIE było w zależnościach — przez co
+    źródło zawsze zwracało puste wyniki. ElementTree wystarcza dla prostego RSS.
+    """
     try:
-        import feedparser
-    except ImportError:
+        req = urllib.request.Request(url, headers=_HEADERS)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read()
+        root = ET.fromstring(raw)
+    except Exception:
         return []
 
-    feed = feedparser.parse(url)
-    mentions = []
-    for entry in feed.entries:
-        title = entry.get("title", "")
-        link = entry.get("link", "")
-        published = entry.get("published", "")
-        date = _parse_date(published) if published else None
+    mentions: list[Mention] = []
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        pub = item.findtext("pubDate") or ""
+        date = _parse_date(pub) if pub else None
         if title:
             mentions.append(Mention(
                 source="Google News",

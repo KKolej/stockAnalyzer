@@ -1,0 +1,322 @@
+{
+  "id": "StockAgentsClaudeCode",
+  "name": "Stock Analysis (Claude Code)",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "chat-trigger",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -320,
+        300
+      ],
+      "webhookId": "stock-analysis-chat-cc"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "tk",
+              "name": "ticker",
+              "type": "string",
+              "value": "={{ ($json.chatInput || $json.ticker || '').toString().trim().toUpperCase() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ticker",
+      "name": "Ticker",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=http://stock-api:8000/technical/{{ $('Ticker').item.json.ticker }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "t-technical",
+      "name": "Technical",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        80,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "=http://stock-api:8000/fundamental/{{ $('Ticker').item.json.ticker }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "t-fundamental",
+      "name": "Fundamental",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "=http://stock-api:8000/dcf/{{ $('Ticker').item.json.ticker }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "t-dcf",
+      "name": "DCF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "=http://stock-api:8000/speculator/{{ $('Ticker').item.json.ticker }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "t-speculator",
+      "name": "Speculator",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "=http://stock-api:8000/sentiment/{{ $('Ticker').item.json.ticker }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "t-sentiment",
+      "name": "Sentiment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "=http://stock-api:8000/macro",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "t-macro",
+      "name": "Macro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1080,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ticker = $('Ticker').item.json.ticker;\nfunction pick(name) { try { return $(name).item.json; } catch (e) { return { error: 'brak danych (' + name + ')' }; } }\nconst dane = {\n  ticker,\n  technical: pick('Technical'),\n  fundamental: pick('Fundamental'),\n  dcf: pick('DCF'),\n  speculator: pick('Speculator'),\n  sentiment: pick('Sentiment'),\n  macro: pick('Macro'),\n};\nconst prompt =\n  `Przeanalizuj spółkę o tickerze ${ticker}. Poniżej surowe dane ze wszystkich agentów (JSON). ` +\n  `Jeśli jakiś blok ma pole \"error\" — odnotuj to i nie zmyślaj.\\n\\nDANE:\\n` +\n  JSON.stringify(dane, null, 2);\nreturn [{ json: { ticker, prompt } }];\n"
+      },
+      "id": "build-prompt",
+      "name": "Buduj prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8787",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"prompt\": $json.prompt, \"system\": \"Jesteś analitykiem giełdowym (GPW + rynki zagraniczne). Dostajesz ticker oraz SUROWE, ustrukturyzowane dane ze wszystkich agentów (Technical, Fundamental, DCF, Speculator, Sentiment, Macro) — to dostawca danych, nie analityk. Twoim zadaniem jest SYNTEZA. Jeśli jakiś blok danych zawiera pole \\\"error\\\" albo brak danych — odnotuj to wprost i nie zmyślaj liczb.\\n\\nSPÓŁKI GAMINGOWE — analiza zdarzeniowa: jeśli Speculator zwróci w katalizatorach targi gier (Gamescom, Tokyo Game Show, The Game Awards, PGA itd.), ZAWSZE zestaw je z nagłówkami z Sentimentu: czy rynek oczekuje konkretnych zapowiedzi (nowa gra, DLC, trailer, data premiery)? Run-up przed targami napędzają oczekiwania — sama data to za mało. Jeśli backtest wzorca \\\"Run-up przed targami\\\" NIE potwierdza go u tej spółki, zaznacz to jako kontrargument. Odróżniaj oficjalne zapowiedzi od plotek. Uwzględnij ryzyko \\\"sell the news\\\".\\n\\nZwróć zwięzłą analizę PO POLSKU w sekcjach:\\n1. Werdykt (jedno zdanie: bullish / neutralny / bearish + krótkie uzasadnienie)\\n2. Technika (trend, kluczowe wskaźniki, wsparcia/opory, ryzyko: Sharpe/DD/beta)\\n3. Fundamenty (wycena: P/E, P/B; jakość: ROE/ROIC, Piotroski, Altman Z; FCF)\\n4. Wycena DCF (fair value Base/Bull/Bear vs cena, upside)\\n5. Spekulacja / katalizatory (wzorce, nadchodzące zdarzenia)\\n6. Sentyment (ogólny wydźwięk + źródła)\\n7. Kontekst makro (waluty, inflacja, WIG20, sektory)\\n8. Główne ryzyka\\n\\nNie podawaj porad inwestycyjnych jako pewników — to analiza danych, nie rekomendacja.\", \"model\": \"claude-sonnet-5\" } }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "claude-proxy",
+      "name": "Claude Code (proxy)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "b.kolej.helper@gmail.com",
+        "toEmail": "b.kolej@gmail.com",
+        "subject": "=Analiza: {{ $('Ticker').item.json.ticker }}",
+        "emailFormat": "text",
+        "text": "={{ $json.response }}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1680,
+        300
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "oCod4PkHItqwcI4T",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Ticker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ticker": {
+      "main": [
+        [
+          {
+            "node": "Technical",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Technical": {
+      "main": [
+        [
+          {
+            "node": "Fundamental",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fundamental": {
+      "main": [
+        [
+          {
+            "node": "DCF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DCF": {
+      "main": [
+        [
+          {
+            "node": "Speculator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Speculator": {
+      "main": [
+        [
+          {
+            "node": "Sentiment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sentiment": {
+      "main": [
+        [
+          {
+            "node": "Macro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Macro": {
+      "main": [
+        [
+          {
+            "node": "Buduj prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buduj prompt": {
+      "main": [
+        [
+          {
+            "node": "Claude Code (proxy)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Code (proxy)": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "meta": {
+    "templateId": "stock-agents-claude-code"
+  }
+}

@@ -59,6 +59,17 @@ def build_scenarios(result: DCFResult, beta: float | None,
     price = result.price or 0.0
     years = result.projection_years
 
+    # DCF na ujemnym FCF nie ma sensu — projekcja ujemnych przepływów przy dodatnim
+    # wzroście daje ujemną "wycenę" i upside <-100%, co dla LLM wygląda jak realna
+    # liczba. Lepiej jasno oznaczyć brak zastosowania niż podać śmieciowy fair value.
+    if fcf is None or fcf <= 0:
+        result.error = (
+            "DCF nieadekwatny: ujemny lub zerowy FCF TTM "
+            f"({fcf}) — model zdyskontowanych przepływów nie ma tu zastosowania"
+        )
+        result.scenarios = []
+        return result
+
     wacc = _estimate_wacc(beta, debt_to_equity, result.currency)
     result.wacc_base = wacc
 

@@ -32,6 +32,9 @@ services:
       N8N_SECURE_COOKIE: "${N8N_SECURE_COOKIE:-false}"
       # na serwerze: publiczny adres n8n (np. https://twojvps.wykr.es:PORT) — patrz DEPLOYMENT.md
       WEBHOOK_URL: "${N8N_WEBHOOK_URL:-}"
+      N8N_HOST: "${N8N_HOST:-}"
+      N8N_PROTOCOL: "${N8N_PROTOCOL:-http}"
+      N8N_PROXY_HOPS: "${N8N_PROXY_HOPS:-0}"
       GENERIC_TIMEZONE: "Europe/Warsaw"
       TZ: "Europe/Warsaw"
       # opcjonalnie: klucz z .env (i tak credential do Anthropic ustawiasz w UI n8n)

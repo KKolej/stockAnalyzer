@@ -38,14 +38,18 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": 'Wymagany JSON: {"prompt": "..."}'})
             return
 
-        cmd = ["claude", "-p", prompt]
+        # prompt idzie przez stdin (nie jako argv) — inaczej duże prompty (np. cały
+        # WIG20) przekraczają MAX_ARG_STRLEN (~128 KB) i subprocess pada z E2BIG.
+        cmd = ["claude", "-p"]
         if model := body.get("model"):
             cmd += ["--model", model]
         if system := body.get("system"):
             cmd += ["--append-system-prompt", system]
 
         try:
-            out = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT)
+            out = subprocess.run(
+                cmd, input=prompt, capture_output=True, text=True, timeout=TIMEOUT
+            )
         except subprocess.TimeoutExpired:
             self._json(504, {"error": f"claude -p przekroczył {TIMEOUT}s"})
             return
