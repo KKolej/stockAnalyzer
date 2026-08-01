@@ -9,8 +9,22 @@ _HORIZONS = [
 ]
 
 
+def _has_trigger(p: PatternResult, horizon_days: int) -> bool:
+    """Czy wzorzec zdarzeniowy ma swój katalizator w tym horyzoncie?
+
+    Wzorce typu post-div / pre-earnings drift opisują ruch wokół konkretnego
+    zdarzenia. Bez zdarzenia w horyzoncie są historyczną ciekawostką, a nie
+    prognozą — wcześniej napędzały projekcje spółek, które w ogóle nie płacą
+    dywidendy. Zostają w `patterns` (LLM je widzi), ale nie ważą w projekcji.
+    """
+    if p.requires_event is None:
+        return True
+    return p.event_days_away is not None and p.event_days_away <= horizon_days
+
+
 def _relevant_patterns(patterns: list[PatternResult], horizon_days: int) -> list[PatternResult]:
-    return [p for p in patterns if p.horizon_days <= horizon_days * 1.5]
+    return [p for p in patterns
+            if p.horizon_days <= horizon_days * 1.5 and _has_trigger(p, horizon_days)]
 
 
 def _weighted_direction(patterns: list[PatternResult]) -> tuple[float, float]:

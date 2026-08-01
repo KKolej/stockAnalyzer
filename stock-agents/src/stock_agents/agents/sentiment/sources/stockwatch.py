@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import re
 import urllib.request
 from datetime import datetime
 
-from ....ticker_map import is_gpw
+from ....ticker_map import STOCKWATCH_SLUGS, is_gpw
 from ..models import Mention, SentimentLabel, SourceResult
 
 _BASE = "https://www.stockwatch.pl"
@@ -12,6 +11,9 @@ _HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
     "Accept-Language": "pl-PL,pl;q=0.9",
 }
+# Tytuł ogólnego serwisu wiadomości — Stockwatch podstawia go zamiast 404,
+# gdy tag „walor" nie istnieje. Bez tej detekcji dostajemy losowe newsy z rynku.
+_FALLBACK_TITLE_MARK = "giełda od fundament"
 
 
 def _parse_date(text: str) -> datetime | None:
@@ -23,12 +25,6 @@ def _parse_date(text: str) -> datetime | None:
     return None
 
 
-def _ticker_in_href(href: str, ticker: str) -> bool:
-    """Sprawdza czy href zawiera dokładnie ten ticker (nie podciąg innego)."""
-    pattern = rf"(?<![A-Z]){re.escape(ticker.upper())}(?![A-Z])"
-    return bool(re.search(pattern, href.upper()))
-
-
 def fetch(ticker: str, company: str) -> SourceResult:
     if not is_gpw(ticker):
         return SourceResult(name="Stockwatch", error="tylko GPW")
@@ -38,8 +34,11 @@ def fetch(ticker: str, company: str) -> SourceResult:
     except ImportError:
         return SourceResult(name="Stockwatch", error="beautifulsoup4 not installed")
 
-    base_ticker = ticker.upper()
-    url = f"{_BASE}/wiadomosci?s={base_ticker}"
+    # Strona tagu spółki zamiast wyszukiwarki pełnotekstowej: `?s=ALE` zwracało
+    # wszystko ze spójnikiem „ale" w slugu („Fed bez podwyżki, ALE rynek…”),
+    # bo filtr szukał tickera w dowolnym miejscu URL-a.
+    slug = STOCKWATCH_SLUGS.get(ticker.upper(), ticker.lower())
+    url = f"{_BASE}/wiadomosci/walor/{slug}"
     try:
         req = urllib.request.Request(url, headers=_HEADERS)
         with urllib.request.urlopen(req, timeout=10) as resp:
@@ -48,18 +47,27 @@ def fetch(ticker: str, company: str) -> SourceResult:
         return SourceResult(name="Stockwatch", error=str(e))
 
     soup = BeautifulSoup(html, "lxml")
-    mentions: list[Mention] = []
 
+    page_title = (soup.title.text if soup.title else "").lower()
+    if _FALLBACK_TITLE_MARK in page_title:
+        return SourceResult(
+            name="Stockwatch",
+            error=f"brak tagu spółki '{slug}' — Stockwatch podstawił ogólny serwis",
+        )
+
+    mentions: list[Mention] = []
     for li in soup.select("li.postList"):
         title_tag = li.find("a", class_="title")
         if not title_tag:
             continue
 
-        href = title_tag.get("href", "")
-        # Odrzuć artykuły dotyczące innych spółek (np. CDR → CDRL)
-        if href and not _ticker_in_href(href, base_ticker):
+        # Dodatkowe zabezpieczenie: artykuł musi być otagowany tą spółką.
+        tags = {a.get("href", "").rsplit("/", 1)[-1].lower()
+                for a in li.select("span.tags a[rel=tag]")}
+        if tags and slug not in tags:
             continue
 
+        href = title_tag.get("href", "")
         strong = title_tag.find("strong")
         title = (strong.get_text(strip=True) if strong else title_tag.get_text(strip=True))
         full_url = href if href.startswith("http") else _BASE + href

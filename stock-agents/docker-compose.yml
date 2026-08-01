@@ -1,6 +1,11 @@
 services:
   stock-api:
-    build: .
+    build:
+      context: .
+      args:
+        # `docker compose build` przekazuje je z powłoki; deploy.sh je ustawia.
+        GIT_SHA: "${GIT_SHA:-unknown}"
+        BUILD_TIME: "${BUILD_TIME:-unknown}"
     ports:
       # na serwerze ustaw API_BIND=127.0.0.1 — API nie musi być publiczne (n8n łączy się po sieci compose)
       - "${API_BIND:-0.0.0.0}:${API_PORT:-8000}:8000"
@@ -35,6 +40,9 @@ services:
       N8N_HOST: "${N8N_HOST:-}"
       N8N_PROTOCOL: "${N8N_PROTOCOL:-http}"
       N8N_PROXY_HOPS: "${N8N_PROXY_HOPS:-0}"
+      # dzienny przegląd WIG20 pobiera 5 endpointów × 20 spółek sekwencyjnie —
+      # domyślny limit runnera (300s) by nie starczył; dajemy 15 min zapasu.
+      N8N_RUNNERS_TASK_TIMEOUT: "900"
       GENERIC_TIMEZONE: "Europe/Warsaw"
       TZ: "Europe/Warsaw"
       # opcjonalnie: klucz z .env (i tak credential do Anthropic ustawiasz w UI n8n)

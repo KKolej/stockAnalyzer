@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -46,11 +48,27 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/version")
+async def version() -> dict[str, str]:
+    """Wersja wdrożonego kodu — pozwala wykryć, że kontener chodzi na starym obrazie.
+
+    Powód: przez ~dobę obraz w Dockerze był starszy niż repo i sentyment z Google
+    News zwracał zero artykułów dla WSZYSTKICH spółek, a nikt tego nie zauważył,
+    bo /health nadal mówiło "ok".
+    """
+    return {
+        "git_sha": os.getenv("GIT_SHA", "unknown"),
+        "built_at": os.getenv("BUILD_TIME", "unknown"),
+        "api_version": app.version,
+    }
+
+
 @app.get("/")
 async def index() -> dict[str, dict[str, str]]:
     return {
         "endpoints": {
             "GET /health": "ping",
+            "GET /version": "git SHA + czas budowy obrazu (kontrola świeżości wdrożenia)",
             "GET /technical/{ticker}": "analiza techniczna, ?days=90",
             "GET /fundamental/{ticker}": "analiza fundamentalna",
             "GET /screener": "screener, ?tickers=CDR,PKO&pe_max=20&sort_by=pe",

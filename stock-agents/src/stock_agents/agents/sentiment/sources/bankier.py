@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import re
 import urllib.request
 from datetime import datetime
 
-from ....ticker_map import is_gpw
+from ....ticker_map import BANKIER_SLUGS, company_identity_tokens, is_gpw
 from ..models import Mention, SentimentLabel, SourceResult
 
 _BASE = "https://www.bankier.pl"
@@ -22,6 +23,25 @@ def _parse_date(text: str) -> datetime | None:
     return None
 
 
+def _page_company(soup: object) -> str:
+    """Nazwa spółki z tytułu strony: 'Wiadomości spółki - Orange Polska SA (ORANGEPL) - …'."""
+    title = getattr(getattr(soup, "title", None), "text", "") or ""
+    return title.split(" - Giełda")[0].replace("Wiadomości spółki - ", "").strip()
+
+
+def _identity_ok(page_company: str, ticker: str) -> bool:
+    """Czy pobrana strona faktycznie dotyczy tej spółki?
+
+    Bankier trzyma historyczne skróty — /akcje/OPL to Optopol, nie Orange Polska.
+    Bez tej kontroli sentyment cicho zwracał newsy zupełnie innej spółki.
+    """
+    tokens = company_identity_tokens(ticker)
+    if not tokens:
+        return True  # brak nazwy w mapie — nie mamy czym weryfikować
+    haystack = page_company.lower()
+    return any(t in haystack for t in tokens)
+
+
 def fetch(ticker: str, company: str) -> SourceResult:
     if not is_gpw(ticker):
         return SourceResult(name="Bankier", error="tylko GPW")
@@ -31,9 +51,8 @@ def fetch(ticker: str, company: str) -> SourceResult:
     except ImportError:
         return SourceResult(name="Bankier", error="beautifulsoup4 not installed")
 
-    import re
-
-    url = f"{_BASE}/gielda/notowania/akcje/{ticker.upper()}/wiadomosci"
+    slug = BANKIER_SLUGS.get(ticker.upper(), ticker.upper())
+    url = f"{_BASE}/gielda/notowania/akcje/{slug}/wiadomosci"
     try:
         req = urllib.request.Request(url, headers=_HEADERS)
         with urllib.request.urlopen(req, timeout=10) as resp:
@@ -42,8 +61,16 @@ def fetch(ticker: str, company: str) -> SourceResult:
         return SourceResult(name="Bankier", error=str(e))
 
     soup = BeautifulSoup(html, "lxml")
-    mentions: list[Mention] = []
 
+    page_company = _page_company(soup)
+    if not _identity_ok(page_company, ticker):
+        return SourceResult(
+            name="Bankier",
+            error=(f"strona /{slug} dotyczy '{page_company}', nie {company} "
+                   f"— pomijam, żeby nie mieszać spółek"),
+        )
+
+    mentions: list[Mention] = []
     for li in soup.select("li.m-listing-article-list__item"):
         a = li.find("a", href=True)
         if not a:

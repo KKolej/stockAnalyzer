@@ -17,6 +17,13 @@ RUN poetry install --only main --no-root
 COPY src/ src/
 RUN poetry install --only-root
 
+# Stempel wdrożenia — wystawiany przez /version. Bez tego stary obraz wygląda
+# identycznie jak świeży (/health zwraca "ok" niezależnie od wersji kodu).
+ARG GIT_SHA=unknown
+ARG BUILD_TIME=unknown
+ENV GIT_SHA=$GIT_SHA \
+    BUILD_TIME=$BUILD_TIME
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \

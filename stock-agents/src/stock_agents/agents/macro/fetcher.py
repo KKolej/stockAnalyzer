@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import json
+import re
 import urllib.request
 from datetime import date
 
@@ -27,6 +29,46 @@ def _get_json(url: str) -> dict:
     req = urllib.request.Request(url, headers=_HEADERS)
     with urllib.request.urlopen(req, timeout=8) as r:
         return json.loads(r.read())
+
+
+def _biznesradar_52w(symbol: str) -> tuple[float, float] | None:
+    """Zakres 52-tygodniowy indeksu GPW z Biznesradaru.
+
+    yfinance dla indeksów PL (WIG20.WA, WIG-BANKI.WA…) zwraca w polach
+    `fiftyTwoWeekLow/High` zakres JEDNEJ sesji — np. dla WIG20 3891.59/3928.98
+    zamiast 2725.91/3928.98. Liczona z tego „pozycja 52W" wychodziła 77% zamiast
+    99% i była kompletnie mylącym sygnałem. Stooq (drugie źródło) stawia dziś
+    ścianę anty-botową, więc bierzemy Biznesradar, który i tak już scrapujemy.
+    """
+    try:
+        from bs4 import BeautifulSoup
+
+        name = symbol.removesuffix(".WA")
+        req = urllib.request.Request(
+            f"https://www.biznesradar.pl/notowania/{name}", headers=_HEADERS
+        )
+        with urllib.request.urlopen(req, timeout=8) as r:
+            soup = BeautifulSoup(r.read(), "lxml")
+
+        text = re.sub(r"\s+", " ", soup.get_text(" "))
+        m = re.search(
+            r"Min 52 tyg\s*:?\s*([\d\s.,]+?)\s+Max 52 tyg\s*:?\s*([\d\s.,]+?)\s", text
+        )
+        if not m:
+            return None
+        low = float(m.group(1).replace(" ", "").replace("\xa0", "").replace(",", "."))
+        high = float(m.group(2).replace(" ", "").replace("\xa0", "").replace(",", "."))
+        if high <= low:
+            return None
+        return low, high
+    except Exception:
+        return None
+
+
+def _pos_in_range(price: float, low: float, high: float) -> float | None:
+    if high <= low:
+        return None
+    return (price - low) / (high - low) * 100
 
 
 def _fetch_fx(data: MacroData) -> None:
@@ -76,13 +118,22 @@ def _fetch_cpi(data: MacroData) -> None:
             return
         for row in table.find_all("tr"):
             cells = [c.get_text(strip=True) for c in row.find_all(["th", "td"])]
-            # ['Inflacja r/r (M)', '05.2026', '103.10', '-0.10']
+            # ['Inflacja r/r (M)', '07.2026', '103.00', '+0.50']
             if len(cells) >= 3 and cells[0].startswith("Inflacja r/r"):
                 index_val = float(cells[2].replace(",", "."))
                 data.cpi_value = index_val
                 data.cpi_change_pct = round(index_val - 100, 2)  # indeks → % r/r
                 data.cpi_date = cells[1]
-                break
+                # Kolumna „Zmiana" = różnica wobec poprzedniego odczytu w p.p.
+                # Bez niej 3.0% wygląda „stabilnie", choć to skok z 2.5%.
+                if len(cells) >= 4:
+                    with contextlib.suppress(ValueError):
+                        data.cpi_change_pp = round(
+                            float(cells[3].replace(",", ".").replace("+", "")), 2
+                        )
+            elif len(cells) >= 3 and cells[0].startswith("Inflacja m/m"):
+                with contextlib.suppress(ValueError):
+                    data.cpi_mom_pct = round(float(cells[2].replace(",", ".")) - 100, 2)
     except Exception as e:
         data.errors.append(f"CPI: {e}")
 
@@ -92,15 +143,19 @@ def _fetch_wig20(data: MacroData) -> None:
         info = yf.Ticker("WIG20.WA").info
         price = info.get("regularMarketPrice")
         prev = info.get("regularMarketPreviousClose")
-        high52 = info.get("fiftyTwoWeekHigh")
-        low52 = info.get("fiftyTwoWeekLow")
 
         if price:
             data.wig20_price = float(price)
         if price and prev and prev > 0:
             data.wig20_change_1d = (price - prev) / prev * 100
-        if price and high52 and low52 and high52 != low52:
-            data.wig20_pos_52w = (price - low52) / (high52 - low52) * 100
+
+        rng = _biznesradar_52w("WIG20")
+        if price and rng:
+            data.wig20_low_52w, data.wig20_high_52w = rng
+            data.wig20_pos_52w = _pos_in_range(float(price), *rng)
+            data.wig20_pos_52w_source = "biznesradar"
+        elif price:
+            data.errors.append("WIG20: brak zakresu 52W (Biznesradar) — pos_52w pominięte")
     except Exception as e:
         data.errors.append(f"WIG20: {e}")
 
@@ -111,20 +166,20 @@ def _fetch_sectors(data: MacroData) -> None:
             info = yf.Ticker(sym).info
             price = info.get("regularMarketPrice")
             prev = info.get("regularMarketPreviousClose")
-            high52 = info.get("fiftyTwoWeekHigh")
-            low52 = info.get("fiftyTwoWeekLow")
 
             if not price:
                 continue
 
             change_1d = (price - prev) / prev * 100 if prev and prev > 0 else 0.0
-            pos_52w = None
-            if high52 and low52 and high52 != low52:
-                pos_52w = (price - low52) / (high52 - low52) * 100
+            rng = _biznesradar_52w(sym)
+            pos_52w = _pos_in_range(float(price), *rng) if rng else None
 
             data.sectors.append(SectorPerf(
                 name=name, symbol=sym,
-                price=float(price), change_1d=change_1d, pos_52w=pos_52w
+                price=float(price), change_1d=change_1d, pos_52w=pos_52w,
+                low_52w=rng[0] if rng else None,
+                high_52w=rng[1] if rng else None,
+                pos_52w_source="biznesradar" if rng else None,
             ))
         except Exception:
             pass

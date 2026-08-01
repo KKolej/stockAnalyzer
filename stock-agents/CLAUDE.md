@@ -81,6 +81,23 @@ inny wycinek analizy (techniczna, fundamentalna, wycena, sentyment itd.) i wysta
 - **`lxml`, `beautifulsoup4`, `numpy` muszą być w `pyproject` deps** — inaczej scraping
   pada w Dockerze (`poetry install --only main`).
 - **yfinance**: rate-limity/blokady → cache; stale prices → flaga świeżości; indeksy PL = 1 dzień.
+- **`fiftyTwoWeekLow/High` z yfinance dla indeksów PL to ZAKRES JEDNEJ SESJI**, nie 52 tygodni
+  (WIG20: 3891/3928 zamiast 2726/3929 → „pozycja 52W" 77% zamiast 99%). Zakres 52W indeksów
+  bierzemy z Biznesradaru (`/notowania/WIG20`, `Min/Max 52 tyg`). **Stooq odpada** — od 2026
+  stawia ścianę anty-botową (JS proof-of-work), CSV nie działa.
+- **Bankier trzyma HISTORYCZNE skróty**: `/akcje/OPL` to **Optopol Technology** (wycofana),
+  nie Orange Polska (`ORANGEPL`). Każdy scraper po slugu MUSI weryfikować nazwę spółki ze strony
+  (`ticker_map.company_identity_tokens`), inaczej cicho zwraca newsy innej firmy.
+- **Stockwatch: `?s=<ticker>` to szukajka pełnotekstowa** — dla `ALE` łapała każdy artykuł ze
+  spójnikiem „ale" w slugu. Używać strony tagu: `/wiadomosci/walor/<ticker>`; brak tagu = podstawiony
+  ogólny serwis (tytuł „Giełda od fundamentów"), trzeba to wykryć.
+- **Świeżość liczyć w SESJACH, nie dniach kalendarzowych** — w sobotę brak piątkowej sesji daje
+  `age_days=2` i stary próg (>4 dni) go przepuszczał.
+- **`/technical` bierze cenę z `history()`, reszta agentów z `info["currentPrice"]`** — potrafią się
+  różnić o kilka % (PGE 9,74 vs 10,11), gdy yfinance nie domknął ostatniej sesji.
+- **Stary obraz w Dockerze wygląda jak świeży** — `/health` zwraca „ok" niezależnie od wersji kodu.
+  Po deployu sprawdzać `/version` (git SHA + czas builda), inaczej łatwo o dobę na starym kodzie
+  (tak zniknął cały Google News z sentymentu).
 - **DuPont**: dźwignia = aktywa/kapitał (z bilansu), NIE `ROE/(marża×rotacja)` (dawało <1).
 - **Magic Formula** wyklucza `Financial Services` i `Utilities` (Greenblatt).
 - Reddit zwraca 403 (blokuje scraping) — znane, sentyment leci z pozostałych źródeł.

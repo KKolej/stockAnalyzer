@@ -94,6 +94,8 @@ class Risk(_Base):
 class DataQuality(_Base):
     last_date: str | None = None
     age_days: int | None = None
+    expected_last_session: str | None = None
+    missing_sessions: int | None = None
     is_stale: bool | None = None
 
 

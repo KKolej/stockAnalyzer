@@ -61,9 +61,20 @@ def _fetch_price_history(yahoo_ticker: str, years: int = 8) -> pd.DataFrame:
     return df[["Date", "Close", "Volume"]].dropna()
 
 
+# WIG20.WA w yfinance zwraca JEDEN wiersz historii, więc momentum względne
+# vs benchmark nigdy się nie liczyło (pattern cicho znikał z wyników). Dla GPW
+# używamy EWP (iShares MSCI Poland) — tak jak agent techniczny do liczenia bety.
+_BENCH_GPW = "EWP"
+_BENCH_US = "^GSPC"
+
+
+def benchmark_for(ticker: str) -> tuple[str, str]:
+    """(symbol, etykieta) benchmarku rynkowego."""
+    return (_BENCH_GPW, "EWP (proxy GPW)") if is_gpw(ticker) else (_BENCH_US, "S&P500")
+
+
 def _fetch_benchmark(ticker: str, years: int = 8) -> pd.DataFrame:
-    bench = "WIG20.WA" if is_gpw(ticker) else "^GSPC"
-    return _fetch_price_history(bench, years)
+    return _fetch_price_history(benchmark_for(ticker)[0], years)
 
 
 # ── Wzorzec dywidendowy ──────────────────────────────────────────────────────
@@ -367,6 +378,24 @@ def analyze_gaming_event_runup(df: pd.DataFrame, today: date | None = None) -> l
 
 # ── Rekomendacje analityków (Biznesradar) ────────────────────────────────────
 
+_REC_MAX_AGE_DAYS = 365
+_PL_MONTHS = {"sty": 1, "lut": 2, "mar": 3, "kwi": 4, "maj": 5, "cze": 6,
+              "lip": 7, "sie": 8, "wrz": 9, "paź": 10, "paz": 10, "lis": 11, "gru": 12}
+
+
+def _parse_br_date(text: str) -> date | None:
+    """Data z Biznesradaru: '13 lut 2026 00:00' → date(2026, 2, 13)."""
+    m = re.match(r"(\d{1,2})\s+([a-ząćęłńóśźż]{3})\w*\s+(\d{4})", text.strip().lower())
+    if not m:
+        return None
+    month = _PL_MONTHS.get(m.group(2))
+    if not month:
+        return None
+    with contextlib.suppress(ValueError):
+        return date(int(m.group(3)), month, int(m.group(1)))
+    return None
+
+
 def analyze_analyst_recommendations(ticker: str) -> PatternResult | None:
     try:
         from bs4 import BeautifulSoup
@@ -379,21 +408,32 @@ def analyze_analyst_recommendations(ticker: str) -> PatternResult | None:
         if not table:
             return None
 
+        cutoff = date.today() - timedelta(days=_REC_MAX_AGE_DAYS)
         buys, holds, sells, targets = 0, 0, 0, []
-        for row in table.find_all("tr")[1:8]:  # ostatnie ~6 rekomendacji
+        rec_dates: list[date] = []
+        skipped_old = 0
+
+        for row in table.find_all("tr")[1:12]:
             cells = [td.get_text(strip=True) for td in row.find_all(["td", "th"])]
-            if len(cells) < 4:
+            if len(cells) < 6:
                 continue
+            # Kolumny: Rodzaj | Cena docelowa | Kurs akt. | CD/K | Kurs z dnia | Data
+            rec_date = _parse_br_date(cells[5])
+            # Bez filtra dat brało się 7 pierwszych wierszy niezależnie od wieku —
+            # KGHM dostawał „2 z 3 sprzedaj" z rekomendacji sprzed pół roku.
+            if rec_date is None or rec_date < cutoff:
+                skipped_old += 1
+                continue
+
             rec_type = cells[0].lower()
-            target_raw = cells[1]
             if "kupuj" in rec_type or "buy" in rec_type or "akumuluj" in rec_type:
                 buys += 1
             elif "sprzedaj" in rec_type or "sell" in rec_type or "redukuj" in rec_type:
                 sells += 1
             else:
                 holds += 1
-            # Parsuj cenę docelową
-            m = re.search(r"[\d,\.]+", target_raw.replace(" ", "").replace("\xa0", ""))
+            rec_dates.append(rec_date)
+            m = re.search(r"[\d,\.]+", cells[1].replace(" ", "").replace("\xa0", ""))
             if m:
                 with contextlib.suppress(ValueError):
                     targets.append(float(m.group().replace(",", ".")))
@@ -411,11 +451,14 @@ def analyze_analyst_recommendations(ticker: str) -> PatternResult | None:
 
         avg_target = sum(targets) / len(targets) if targets else None
         target_str = f", cel avg {avg_target:.2f}" if avg_target else ""
+        newest = max(rec_dates).strftime("%d.%m.%Y") if rec_dates else "?"
+        old_str = f", pominięto {skipped_old} starszych niż 12 mies." if skipped_old else ""
         return PatternResult(
             name="Rekomendacje analityków",
             direction=direction, strength=strength, probability=prob,
             sample_size=total, avg_return=None, horizon_days=60,
-            note=f"Kupuj:{buys} Trzymaj:{holds} Sprzedaj:{sells}{target_str}",
+            note=(f"Kupuj:{buys} Trzymaj:{holds} Sprzedaj:{sells}{target_str}"
+                  f" (najnowsza {newest}{old_str})"),
         )
     except Exception:
         return None
@@ -587,7 +630,7 @@ def run_all_patterns(
         return [], []
 
     gpw = is_gpw(ticker)
-    bench_label = "WIG20" if gpw else "S&P500"
+    bench_label = benchmark_for(ticker)[1]
     benchmark = _fetch_benchmark(ticker)
     sector_ticker = _SECTOR_MAP.get(ticker.upper()) if gpw else None
     sector_df = _fetch_price_history(sector_ticker) if sector_ticker else None
@@ -611,9 +654,28 @@ def run_all_patterns(
     except Exception:
         earnings = pd.DataFrame()
 
+    def _days_to(catalyst_name: str) -> int | None:
+        upcoming = [c.days_away for c in catalysts
+                    if c.name.lower().startswith(catalyst_name.lower()) and c.days_away >= 0]
+        return min(upcoming) if upcoming else None
+
+    div_days = _days_to("Ex-dywidenda")
+    earn_days = _days_to("Raport wynikowy")
+
     patterns: list[PatternResult] = []
-    patterns.extend(analyze_dividend_pattern(df, div_dates))
-    patterns.extend(analyze_earnings_pattern(df, earnings))
+    for p in analyze_dividend_pattern(df, div_dates):
+        p.requires_event, p.event_days_away = "Ex-dywidenda", div_days
+        if div_days is None:
+            p.note += " — brak nadchodzącej ex-div, wzorzec bez triggera"
+        patterns.append(p)
+    for p in analyze_earnings_pattern(df, earnings):
+        # Sam „batting average" (skuteczność bicia konsensusu) opisuje reakcję na
+        # raport, ale nie jest wzorcem czasowym — gatujemy tylko drift przedwynikowy.
+        if p.name.startswith("Pre-earnings"):
+            p.requires_event, p.event_days_away = "Raport wynikowy", earn_days
+            if earn_days is None:
+                p.note += " — brak zaplanowanego raportu, wzorzec bez triggera"
+        patterns.append(p)
 
     vol = analyze_volume(df)
     if vol:

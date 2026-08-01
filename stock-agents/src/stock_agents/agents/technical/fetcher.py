@@ -96,14 +96,35 @@ def fetch_close_series(yahoo_symbol: str, days_back: int = 90) -> pd.Series | No
         return None
 
 
+def _last_expected_session(today: pd.Timestamp) -> pd.Timestamp:
+    """Ostatni dzień roboczy (pn–pt) nie późniejszy niż dziś."""
+    day = today
+    while day.weekday() >= 5:  # 5=sobota, 6=niedziela
+        day -= pd.Timedelta(days=1)
+    return day
+
+
 def data_staleness(df: pd.DataFrame) -> dict[str, object]:
-    """Sprawdza, jak świeża jest ostatnia świeca (yfinance bywa opóźniony/stale)."""
+    """Sprawdza, jak świeża jest ostatnia świeca (yfinance bywa opóźniony/stale).
+
+    Liczy BRAKUJĄCE SESJE, nie dni kalendarzowe. Sam wiek w dniach nie wystarcza:
+    w sobotę brak piątkowej sesji daje age_days=2, więc stary próg (>4 dni) go
+    przepuszczał i cała analiza jechała na danych o sesję starszych, bez ostrzeżenia.
+    Dni wolne od handlu (święta) mogą dać fałszywy alarm — dlatego obok flagi
+    podajemy liczbę sesji i datę, żeby konsument mógł ocenić sam.
+    """
     last_date = pd.to_datetime(df["Date"].iloc[-1]).normalize()
     today = pd.Timestamp.now().normalize()
     age_days = int((today - last_date).days)
-    # >4 dni kalendarzowych = podejrzanie nieświeże (uwzględnia weekend + święto)
+
+    expected = _last_expected_session(today)
+    missing = int(len(pd.bdate_range(last_date, expected))) - 1
+    missing_sessions = max(missing, 0)
+
     return {
         "last_date": last_date.strftime("%Y-%m-%d"),
         "age_days": age_days,
-        "is_stale": age_days > 4,
+        "expected_last_session": expected.strftime("%Y-%m-%d"),
+        "missing_sessions": missing_sessions,
+        "is_stale": age_days > 4 or missing_sessions >= 1,
     }
