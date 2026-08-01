@@ -12,7 +12,7 @@ router = APIRouter(prefix="/broker", tags=["broker"])
 
 
 def _guard(fn: Any) -> Any:
-    """Zamienia BrokerError na czysty błąd HTTP zamiast 500."""
+    """Turns a BrokerError into a clean HTTP error instead of a 500."""
     try:
         return fn()
     except BrokerError as e:
@@ -21,7 +21,7 @@ def _guard(fn: Any) -> Any:
 
 @router.get("/account", response_model=AccountResponse)
 def account() -> Any:
-    """Stan konta: saldo, equity, siła nabywcza, tryb (paper/live)."""
+    """Account state: balance, equity, buying power, mode (paper/live)."""
     return _guard(client.get_account)
 
 
@@ -33,13 +33,13 @@ def positions() -> Any:
 
 @router.get("/orders", response_model=list[Order])
 def orders(status: str = Query(default="open", description="open|closed|all")) -> Any:
-    """Zlecenia (domyślnie otwarte)."""
+    """Orders (open ones by default)."""
     return _guard(lambda: client.get_orders(status))
 
 
 @router.post("/orders", response_model=Order)
 def submit_order(req: OrderRequest) -> Any:
-    """Składa zlecenie kupna/sprzedaży (paper = demo)."""
+    """Places a buy/sell order (paper = demo)."""
     return _guard(lambda: client.place_order(
         symbol=req.symbol,
         side=req.side,
@@ -60,5 +60,5 @@ def cancel(order_id: str) -> Any:
 
 @router.delete("/positions/{symbol}", response_model=Order)
 def close(symbol: str) -> Any:
-    """Zamyka całą pozycję na danym symbolu (zlecenie przeciwne)."""
+    """Closes the whole position on a given symbol (opposite order)."""
     return _guard(lambda: client.close_position(symbol))

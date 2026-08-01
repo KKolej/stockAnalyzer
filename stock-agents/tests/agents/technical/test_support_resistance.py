@@ -12,7 +12,7 @@ from stock_agents.agents.technical.support_resistance import (
 
 
 def _df_from_closes(closes: list[float]) -> pd.DataFrame:
-    """Buduje OHLC z listy zamknięć (High/Low = ±0.5 wokół Close), stały ATR."""
+    """Builds OHLC from a list of closes (High/Low = ±0.5 around Close), constant ATR."""
     closes_arr = np.array(closes, dtype=float)
     return pd.DataFrame({
         "Date": pd.date_range("2024-01-01", periods=len(closes)),
@@ -26,7 +26,7 @@ def _df_from_closes(closes: list[float]) -> pd.DataFrame:
 
 
 def test_find_swings_detects_peak_and_trough():
-    # wyraźny szczyt na idx 3, dołek na idx 7
+    # clear peak at idx 3, trough at idx 7
     df = _df_from_closes([10, 11, 12, 15, 12, 11, 10, 7, 9, 10, 11])
     swings = find_swings(df, window=2)
     highs = [s["price"] for s in swings if s["type"] == "high"]
@@ -51,7 +51,7 @@ def test_cluster_merges_close_levels_and_counts_touches():
 
 def test_pivot_points_classic_formula():
     df = _df_from_closes([10] * 5)
-    # ostatnia świeca: High=10.5, Low=9.5, Close=10 → PP=10, R1=10.5, S1=9.5
+    # last candle: High=10.5, Low=9.5, Close=10 -> PP=10, R1=10.5, S1=9.5
     piv = pivot_points(df)
     assert piv["pp"] == 10.0
     assert piv["r1"] == 10.5
@@ -59,19 +59,19 @@ def test_pivot_points_classic_formula():
 
 
 def test_fibonacci_uptrend_direction_and_levels():
-    # rosnący ciąg → dołek przed szczytem → trend "up"
+    # rising sequence -> trough before peak -> "up" trend
     df = _df_from_closes(list(range(10, 40)))
     fib = fibonacci(df, lookback=30)
     assert fib["direction"] == "up"
     # 0% = high, 100% = low
     assert fib["levels"]["0.000"] == fib["high"]
     assert fib["levels"]["1.000"] == fib["low"]
-    # 50% pomiędzy
+    # 50% in between
     assert fib["low"] < fib["levels"]["0.500"] < fib["high"]
 
 
 def test_analyze_splits_support_below_resistance_above():
-    df = _df_from_closes([10, 14, 10, 14, 10, 14, 10, 14, 12])  # cena 12 w środku
+    df = _df_from_closes([10, 14, 10, 14, 10, 14, 10, 14, 12])  # price 12 in the middle
     sr = analyze_support_resistance(df, window=1)
     assert sr["nearest_support"] is None or sr["nearest_support"]["price"] < sr["price"]
     assert sr["nearest_resistance"] is None or sr["nearest_resistance"]["price"] >= sr["price"]

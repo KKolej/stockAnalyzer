@@ -1,11 +1,11 @@
-"""Kalendarz targów i wydarzeń branży gier — katalizatory dla spółek gamingowych.
+"""Calendar of gaming industry trade shows — catalysts for gaming companies.
 
-Ceny spółek gamingowych często rosną PRZED dużymi targami (zapowiedzi, trailery,
-pokazy wydawców) — run-up budowany tygodnie wcześniej. Ten moduł dokłada targi
-do listy katalizatorów spekulanta dla spółek wykrytych po `industry` z yfinance.
+Gaming stocks often rise BEFORE big shows (announcements, trailers, publisher
+showcases) — a run-up built weeks in advance. This module adds trade shows to the
+speculator's catalyst list for companies detected via `industry` from yfinance.
 
-UWAGA: daty trzeba raz w roku odświeżyć (oficjalne strony wydarzeń).
-Daty oznaczone "orientacyjna" bazują na typowym terminie z lat ubiegłych.
+CAUTION: the dates need refreshing once a year (from official event pages).
+Dates marked "orientacyjna" are based on the usual slot in previous years.
 """
 from __future__ import annotations
 
@@ -13,11 +13,11 @@ from datetime import date
 
 from .models import Catalyst
 
-# Wykrywanie po yfinance `industry` — Yahoo klasyfikuje spółki gamingowe
-# (również GPW) jako "Electronic Gaming & Multimedia".
+# Detected via the yfinance `industry` field — Yahoo classifies gaming companies
+# (GPW ones too) as "Electronic Gaming & Multimedia".
 _GAMING_INDUSTRY_KEYWORDS = ("gaming", "video game")
 
-# (nazwa, data startu, opis) — opis krótki, trafia do LLM-a przez API
+# (name, start date, description) — description is short, it reaches the LLM through the API
 GAMING_EVENTS: list[tuple[str, date, str]] = [
     ("Gamescom (Kolonia)", date(2026, 8, 26),
      "Największe targi gier w Europie — zapowiedzi/trailery, częsty run-up cen przed targami"),
@@ -40,8 +40,8 @@ GAMING_EVENTS: list[tuple[str, date, str]] = [
 ]
 
 
-# Historyczne daty startu powtarzalnych targów — do backtestu run-upu
-# (dokładność ±1-2 dni nie ma znaczenia przy oknie 30-dniowym).
+# Historical start dates of recurring trade shows — for the run-up backtest
+# (±1-2 days of accuracy is irrelevant with a 30-day window).
 EVENT_HISTORY: dict[str, list[date]] = {
     "Gamescom": [
         date(2018, 8, 21), date(2019, 8, 20), date(2020, 8, 27),
@@ -62,7 +62,7 @@ EVENT_HISTORY: dict[str, list[date]] = {
 
 
 def upcoming_recurring_events(today: date | None = None, window_days: int = 120) -> list[tuple[str, date, list[date]]]:
-    """Powtarzalne targi w nadchodzącym oknie + ich daty historyczne (do backtestu)."""
+    """Recurring trade shows in the upcoming window plus their historical dates (for backtesting)."""
     today = today or date.today()
     out: list[tuple[str, date, list[date]]] = []
     for name, dates in EVENT_HISTORY.items():
@@ -83,7 +83,7 @@ def is_gaming_company(industry: str | None) -> bool:
 
 
 def gaming_event_catalysts(today: date | None = None) -> list[Catalyst]:
-    """Nadchodzące targi gier w oknie -7..+120 dni (run-up + samo wydarzenie)."""
+    """Upcoming gaming trade shows in a -7..+120 day window (run-up plus the event itself)."""
     today = today or date.today()
     out: list[Catalyst] = []
     for name, event_date, description in GAMING_EVENTS:

@@ -40,7 +40,7 @@ class TestPeSignal:
         assert pe_signal(make_data(pe_trailing=30.0))["signal"] == "BEARISH"
         assert pe_signal(make_data(pe_trailing=50.0))["strength"] == "strong"
 
-    def test_brak_lub_ujemne_pe(self):
+    def test_missing_or_negative_pe(self):
         assert pe_signal(make_data()) is None
         assert pe_signal(make_data(pe_trailing=-5.0)) is None
 
@@ -53,15 +53,15 @@ class TestRoeSignal:
 
 
 class TestDebtSignal:
-    def test_de_w_procentach(self):
-        # yfinance podaje D/E w %, np. 250 = 250%
+    def test_de_in_percent(self):
+        # yfinance reports D/E in %, e.g. 250 = 250%
         assert debt_signal(make_data(debt_to_equity=20.0))["signal"] == "BULLISH"
         assert debt_signal(make_data(debt_to_equity=250.0))["strength"] == "strong"
         assert debt_signal(make_data(debt_to_equity=150.0))["signal"] == "BEARISH"
 
 
 class TestDividendSignal:
-    def test_zero_dywidendy_bez_sygnalu(self):
+    def test_zero_dividend_gives_no_signal(self):
         assert dividend_signal(make_data(dividend_yield=0)) is None
         assert dividend_signal(make_data(dividend_yield=0.07))["strength"] == "strong"
 
@@ -72,13 +72,13 @@ class TestTrendy:
         return [YearlyRecord(year=str(year - i), **{field: v})
                 for i, v in enumerate(values_newest_first)]
 
-    def test_wzrost_przychodow_cagr(self):
-        # 100 → 200 przez 4 lata = CAGR ~19% → strong bullish
+    def test_revenue_growth_cagr(self):
+        # 100 -> 200 over 4 years = CAGR ~19% -> strong bullish
         d = make_data(history=self._history("revenue", [200.0, 150.0, 120.0, 110.0, 100.0]))
         s = revenue_growth_signal(d)
         assert s["signal"] == "BULLISH" and s["strength"] == "strong"
 
-    def test_spadek_przychodow(self):
+    def test_revenue_decline(self):
         d = make_data(history=self._history("revenue", [50.0, 80.0, 100.0]))
         assert revenue_growth_signal(d)["signal"] == "BEARISH"
 
@@ -126,10 +126,10 @@ class TestScoring:
 
 
 class TestGenerateSignals:
-    def test_pusta_spolka_bez_sygnalow(self):
+    def test_empty_company_has_no_signals(self):
         assert generate_signals(make_data()) == []
 
-    def test_kazdy_sygnal_ma_wymagane_pola(self):
+    def test_every_signal_has_required_fields(self):
         d = make_data(pe_trailing=8.0, roe=0.25, dividend_yield=0.07,
                       piotroski_score=8, piotroski_max=9)
         for s in generate_signals(d):

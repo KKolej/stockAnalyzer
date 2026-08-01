@@ -9,7 +9,7 @@ from email.utils import parsedate_to_datetime
 from ..models import Mention, SentimentLabel, SourceResult
 
 _RSS_URL = "https://news.google.com/rss/search?q={query}&hl={lang}&gl={country}&ceid={ceid}"
-# Google News RSS bywa kapryśne bez User-Agenta przeglądarki.
+# Google News RSS gets fussy without a browser User-Agent.
 _HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120 Safari/537.36",
@@ -33,10 +33,10 @@ def _parse_date(text: str) -> datetime | None:
 
 
 def _fetch_feed(url: str) -> list[Mention]:
-    """Pobiera i parsuje RSS Google News czystym stdlib (bez zależności feedparser).
+    """Fetches and parses the Google News RSS with plain stdlib (no feedparser dependency).
 
-    Wcześniej używaliśmy `feedparser`, którego NIE było w zależnościach — przez co
-    źródło zawsze zwracało puste wyniki. ElementTree wystarcza dla prostego RSS.
+    We used to rely on `feedparser`, which was NOT in the dependencies — so this source
+    always returned empty results. ElementTree is enough for simple RSS.
     """
     try:
         req = urllib.request.Request(url, headers=_HEADERS)

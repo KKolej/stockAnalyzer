@@ -24,20 +24,20 @@ def _parse_date(text: str) -> datetime | None:
 
 
 def _page_company(soup: object) -> str:
-    """Nazwa spółki z tytułu strony: 'Wiadomości spółki - Orange Polska SA (ORANGEPL) - …'."""
+    """Company name from the page title: 'Wiadomości spółki - Orange Polska SA (ORANGEPL) - …'."""
     title = getattr(getattr(soup, "title", None), "text", "") or ""
     return title.split(" - Giełda")[0].replace("Wiadomości spółki - ", "").strip()
 
 
 def _identity_ok(page_company: str, ticker: str) -> bool:
-    """Czy pobrana strona faktycznie dotyczy tej spółki?
+    """Does the fetched page really describe this company?
 
-    Bankier trzyma historyczne skróty — /akcje/OPL to Optopol, nie Orange Polska.
-    Bez tej kontroli sentyment cicho zwracał newsy zupełnie innej spółki.
+    Bankier keeps historical tickers — /akcje/OPL is Optopol, not Orange Polska.
+    Without this check the sentiment agent silently returned another company's news.
     """
     tokens = company_identity_tokens(ticker)
     if not tokens:
-        return True  # brak nazwy w mapie — nie mamy czym weryfikować
+        return True  # no name in the map — nothing to verify against
     haystack = page_company.lower()
     return any(t in haystack for t in tokens)
 

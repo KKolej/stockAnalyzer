@@ -15,14 +15,14 @@ class TestHealth:
         resp = client.get("/")
         assert resp.status_code == 200
         endpoints = resp.json()["endpoints"]
-        # kontrakt dla n8n — te ścieżki muszą być udokumentowane
+        # contract for n8n — these paths must stay documented
         for path in ["GET /technical/{ticker}", "GET /fundamental/{ticker}",
                      "GET /macro", "GET /dcf/{ticker}", "GET /sentiment/{ticker}"]:
             assert path in endpoints
 
 
 class TestOpenApiKontrakt:
-    """Kontrakt schematu dla n8n — endpointy muszą istnieć w OpenAPI."""
+    """Schema contract for n8n — the endpoints must exist in OpenAPI."""
 
     def test_wszystkie_sciezki_zarejestrowane(self):
         paths = client.get("/openapi.json").json()["paths"]
@@ -36,7 +36,7 @@ class TestOpenApiKontrakt:
             assert path in paths, f"brak {path} w OpenAPI"
 
     def test_endpointy_danych_maja_response_model(self):
-        # response_model → schemat z $ref zamiast pustego {}
+        # response_model -> schema with $ref instead of an empty {}
         spec = client.get("/openapi.json").json()
         for path in ["/technical/{ticker}", "/fundamental/{ticker}", "/macro",
                      "/dcf/{ticker}", "/sentiment/{ticker}"]:

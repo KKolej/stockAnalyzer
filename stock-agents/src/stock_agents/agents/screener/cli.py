@@ -26,12 +26,12 @@ Przykłady:
     parser.add_argument("--pe-min",  type=float, metavar="N", help="P/E minimalnie N")
     parser.add_argument("--pb-max",  type=float, metavar="N", help="P/B maksymalnie N")
 
-    # Filtry rentowności
+    # Profitability filters
     parser.add_argument("--roe-min",    type=float, metavar="N", help="ROE minimalnie N%%")
     parser.add_argument("--roa-min",    type=float, metavar="N", help="ROA minimalnie N%%")
     parser.add_argument("--margin-min", type=float, metavar="N", help="Marża netto min N%%")
 
-    # Filtry dywidendy i finansów
+    # Dividend and balance sheet filters
     parser.add_argument("--div-min",        type=float, metavar="N", help="Stopa dywidendy min N%%")
     parser.add_argument("--market-cap-min", type=float, metavar="N", help="Kapitalizacja min N mln PLN")
     parser.add_argument("--market-cap-max", type=float, metavar="N", help="Kapitalizacja max N mln PLN")

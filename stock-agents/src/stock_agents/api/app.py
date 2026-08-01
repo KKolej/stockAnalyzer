@@ -20,7 +20,7 @@ from .routes import (
 
 app = FastAPI(
     title="Stock Agents API",
-    description="REST API dla agentów analizy giełdowej — GPW i rynki zagraniczne",
+    description="REST API for stock analysis agents — GPW and foreign markets",
     version="1.0.0",
 )
 
@@ -50,11 +50,11 @@ async def health() -> dict[str, str]:
 
 @app.get("/version")
 async def version() -> dict[str, str]:
-    """Wersja wdrożonego kodu — pozwala wykryć, że kontener chodzi na starym obrazie.
+    """Version of the deployed code — reveals that the container runs an old image.
 
-    Powód: przez ~dobę obraz w Dockerze był starszy niż repo i sentyment z Google
-    News zwracał zero artykułów dla WSZYSTKICH spółek, a nikt tego nie zauważył,
-    bo /health nadal mówiło "ok".
+    Why: for about a day the Docker image was older than the repo and Google News
+    sentiment returned zero articles for EVERY company, and nobody noticed, because
+    /health still said "ok".
     """
     return {
         "git_sha": os.getenv("GIT_SHA", "unknown"),

@@ -51,7 +51,7 @@ def macd_signal(row: pd.Series) -> Signal | None:
     hist = row.get("MACD_hist")
     if pd.isna(macd) or pd.isna(signal_line):
         return None
-    # Nie emituj sygnału gdy histogram jest bliski zeru (brak rozstrzygnięcia)
+    # Do not emit a signal when the histogram is near zero (no resolution)
     if hist is not None and not pd.isna(hist) and abs(hist) < 0.001:
         return None
     diff = macd - signal_line
@@ -353,7 +353,7 @@ def _strength_from_touches(touches: int) -> str:
 
 
 def support_resistance_signal(sr: dict[str, Any]) -> Signal | None:
-    """Sygnał gdy cena jest tuż przy strefie wsparcia (byczo) lub oporu (niedźwiedzio)."""
+    """Signal when price sits right at a support zone (bullish) or resistance (bearish)."""
     price = sr.get("price")
     atr = sr.get("atr")
     sup = sr.get("nearest_support")
@@ -361,13 +361,13 @@ def support_resistance_signal(sr: dict[str, Any]) -> Signal | None:
     if not price:
         return None
 
-    # próg bliskości: 0.5×ATR, a gdy brak ATR — 1% ceny
+    # proximity threshold: 0.5×ATR, or 1% of price when ATR is missing
     threshold = (atr * NEAR_ATR_MULT) if atr else (price * 0.01)
 
     dist_sup = abs(price - sup["price"]) if sup is not None else None
     dist_res = abs(res["price"] - price) if res is not None else None
 
-    # wsparcie ma pierwszeństwo, gdy jest bliżej (lub jako jedyne w zasięgu)
+    # support wins when it is closer (or the only level in range)
     if sup is not None and dist_sup is not None and dist_sup <= threshold and (
         dist_res is None or dist_sup <= dist_res
     ):

@@ -19,28 +19,28 @@ class TestFiltry:
         out = apply_filters(rows, ScreenerFilters(pe_max=20.0))
         assert [r.ticker for r in out] == ["A"]
 
-    def test_brak_wartosci_odrzuca_przy_aktywnym_filtrze(self):
+    def test_missing_value_is_rejected_when_filter_active(self):
         rows = [make_row("A", pe=10.0), make_row("B", pe=None)]
         out = apply_filters(rows, ScreenerFilters(pe_max=20.0))
         assert [r.ticker for r in out] == ["A"]
 
-    def test_roe_min_podawane_w_procentach(self):
-        # roe w danych to ułamek (0.15), filtr przyjmuje procenty (15)
+    def test_roe_min_is_given_in_percent(self):
+        # roe in the data is a fraction (0.15), the filter expects percent (15)
         rows = [make_row("A", roe=0.20), make_row("B", roe=0.10)]
         out = apply_filters(rows, ScreenerFilters(roe_min=15.0))
         assert [r.ticker for r in out] == ["A"]
 
-    def test_market_cap_w_milionach(self):
+    def test_market_cap_in_millions(self):
         rows = [make_row("A", market_cap=5e9), make_row("B", market_cap=1e8)]
         out = apply_filters(rows, ScreenerFilters(market_cap_min=1000.0))  # 1000 mln
         assert [r.ticker for r in out] == ["A"]
 
-    def test_wiersz_z_bledem_zawsze_odrzucony(self):
+    def test_row_with_error_is_always_rejected(self):
         rows = [make_row("A", pe=10.0), make_row("B", pe=5.0, error="boom")]
         out = apply_filters(rows, ScreenerFilters())
         assert [r.ticker for r in out] == ["A"]
 
-    def test_bez_filtrow_przechodzi_wszystko(self):
+    def test_without_filters_everything_passes(self):
         rows = [make_row("A"), make_row("B")]
         assert len(apply_filters(rows, ScreenerFilters())) == 2
 
@@ -51,7 +51,7 @@ class TestSortowanie:
         out = apply_filters(rows, ScreenerFilters())
         assert [r.ticker for r in out] == ["B", "C", "A"]
 
-    def test_brakujace_wartosci_na_koncu(self):
+    def test_missing_values_sort_last(self):
         rows = [make_row("A", pe=None), make_row("B", pe=10.0)]
         out = apply_filters(rows, ScreenerFilters())
         assert [r.ticker for r in out] == ["B", "A"]
@@ -66,14 +66,14 @@ class TestSortowanie:
         out = apply_filters(rows, ScreenerFilters(top=2))
         assert len(out) == 2
 
-    def test_nieznane_pole_sortowania_uzywa_pe(self):
+    def test_unknown_sort_field_falls_back_to_pe(self):
         rows = [make_row("A", pe=30.0), make_row("B", pe=10.0)]
         out = apply_filters(rows, ScreenerFilters(sort_by="nonsens"))
         assert [r.ticker for r in out] == ["B", "A"]
 
 
 class TestMagicFormula:
-    def test_ranking_suma_rankow_ey_i_roe(self):
+    def test_ranking_is_sum_of_ey_and_roe_ranks(self):
         rows = [
             make_row("A", earnings_yield=0.20, roe=0.30, sector="Technology"),
             make_row("B", earnings_yield=0.10, roe=0.10, sector="Technology"),
@@ -94,10 +94,10 @@ class TestMagicFormula:
         assert by["BANK"] is None
         assert by["UTIL"] is None
         assert by["TECH"] is not None
-        # spółki bez rankingu lądują na końcu listy
+        # companies without a ranking land at the end of the list
         assert out[0].ticker == "TECH"
 
-    def test_brak_danych_dostaje_najgorszy_rank(self):
+    def test_missing_data_gets_worst_rank(self):
         rows = [
             make_row("A", earnings_yield=0.20, roe=0.30, sector="Technology"),
             make_row("B", earnings_yield=None, roe=None, sector="Technology"),

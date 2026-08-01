@@ -27,16 +27,16 @@ def _fetch_html(path: str, ticker: str) -> str:
 
 
 def _parse_number(text: str) -> float | None:
-    # Biznesradar: spacja (lub nbsp) = separator tysięcy, przecinek = część dziesiętna.
-    # Najpierw usuń spacje, DOPIERO potem wyodrębnij liczbę — inaczej "2 027 mln"
-    # zostałoby ucięte do "2" (separator tysięcy traktowany jak koniec liczby).
+    # Biznesradar: a space (or nbsp) is the thousands separator, a comma the decimal point.
+    # Strip spaces FIRST and only then extract the number — otherwise "2 027 mln"
+    # would be truncated to "2" (the thousands separator read as end of number).
     clean = text.strip().replace("\xa0", "").replace(" ", "")
     m = re.match(r"-?[\d.,]+", clean)
     if not m:
         return None
     token = m.group(0)
     if "," in token:
-        # przecinek = dziesiętne; ewentualne kropki to separatory tysięcy
+        # comma = decimal point; any dots are thousands separators
         token = token.replace(".", "").replace(",", ".")
     try:
         return float(token)
@@ -161,8 +161,8 @@ def fetch_history(ticker: str) -> list[YearlyRecord]:
                 return data[label][i]
         return None
 
-    # Biznesradar raportuje kwoty w tysiącach PLN — skalujemy do PLN absolutnych,
-    # by były spójne z danymi TTM z yfinance (które są w pełnych PLN).
+    # Biznesradar reports amounts in thousands of PLN — we scale to absolute PLN
+    # to stay consistent with the TTM data from yfinance (which is in full PLN).
     _K = 1000.0
 
     def _abs(v: float | None) -> float | None:
@@ -186,7 +186,7 @@ def fetch_history(ticker: str) -> list[YearlyRecord]:
             net_income=_abs(net),
             ebitda=_abs(ebitda),
             operating_income=_abs(op),
-            eps=eps_val,  # już w PLN na akcję — nie skalujemy
+            eps=eps_val,  # already PLN per share — no scaling
             roe=roe_val / 100 if roe_val is not None else None,
             profit_margin=margin_val / 100 if margin_val is not None else None,
             operating_cf=_abs(op_cf),

@@ -1,10 +1,10 @@
-"""Prosty, wątkowo-bezpieczny cache TTL w pamięci.
+"""Simple, thread-safe in-memory TTL cache.
 
-Niezbędny dla wdrożenia w chmurze: yfinance/scraping są wolne i podatne na
-rate-limity. Cache redukuje liczbę zapytań i przyspiesza zbiorcze endpointy.
+Essential for a cloud deployment: yfinance and scraping are slow and rate-limited.
+The cache cuts the number of requests and speeds up the aggregate endpoints.
 
-Obiekty pandas są kopiowane przy zapisie i odczycie — dzięki temu mutacja
-zwróconego DataFrame (np. dodanie wskaźników) nie psuje wpisu w cache.
+pandas objects are copied on write and on read — so mutating a returned DataFrame
+(e.g. adding indicators) does not corrupt the cache entry.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ import pandas as pd
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-DEFAULT_TTL = int(os.getenv("CACHE_TTL", "900"))  # sekundy (domyślnie 15 min)
+DEFAULT_TTL = int(os.getenv("CACHE_TTL", "900"))  # seconds (15 min by default)
 CACHE_ENABLED = os.getenv("CACHE_ENABLED", "1") != "0"
 
 _CACHE: dict[Any, tuple[float, Any]] = {}
@@ -33,7 +33,7 @@ def _copy(value: Any) -> Any:
 
 
 def ttl_cache(ttl: int = DEFAULT_TTL) -> Callable[[F], F]:
-    """Dekorator cache'ujący wynik funkcji na `ttl` sekund (klucz = argumenty)."""
+    """Decorator caching a function result for `ttl` seconds (key = arguments)."""
 
     def decorator(fn: F) -> F:
         @functools.wraps(fn)
@@ -48,7 +48,7 @@ def ttl_cache(ttl: int = DEFAULT_TTL) -> Callable[[F], F]:
                     return _copy(hit[1])
             result = fn(*args, **kwargs)
             with _LOCK:
-                # usuń przeterminowane wpisy, żeby cache nie rósł bez ograniczeń
+                # drop expired entries so the cache does not grow without bound
                 expired = [k for k, (exp, _) in _CACHE.items() if now >= exp]
                 for k in expired:
                     del _CACHE[k]

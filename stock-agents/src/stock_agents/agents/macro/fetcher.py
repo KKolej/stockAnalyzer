@@ -32,13 +32,13 @@ def _get_json(url: str) -> dict:
 
 
 def _biznesradar_52w(symbol: str) -> tuple[float, float] | None:
-    """Zakres 52-tygodniowy indeksu GPW z Biznesradaru.
+    """52-week range of a GPW index from Biznesradar.
 
-    yfinance dla indeksów PL (WIG20.WA, WIG-BANKI.WA…) zwraca w polach
-    `fiftyTwoWeekLow/High` zakres JEDNEJ sesji — np. dla WIG20 3891.59/3928.98
-    zamiast 2725.91/3928.98. Liczona z tego „pozycja 52W" wychodziła 77% zamiast
-    99% i była kompletnie mylącym sygnałem. Stooq (drugie źródło) stawia dziś
-    ścianę anty-botową, więc bierzemy Biznesradar, który i tak już scrapujemy.
+    For Polish indices (WIG20.WA, WIG-BANKI.WA…) yfinance returns a SINGLE session's
+    range in `fiftyTwoWeekLow/High` — for WIG20 that was 3891.59/3928.98 instead of
+    2725.91/3928.98. The resulting "52W position" came out as 77% instead of 99%,
+    a completely misleading signal. Stooq (the second source) now serves an anti-bot
+    wall, so we use Biznesradar, which we scrape anyway.
     """
     try:
         from bs4 import BeautifulSoup
@@ -102,8 +102,8 @@ def _fetch_gold(data: MacroData) -> None:
 
 
 def _fetch_cpi(data: MacroData) -> None:
-    # UWAGA: /notowania/CPI to spółka giełdowa "CPI FIM SA", NIE wskaźnik inflacji.
-    # Inflacja jest w tabeli wskaźników makro, jako indeks 100+x (103.10 → +3.1% r/r).
+    # CAUTION: /notowania/CPI is the listed company "CPI FIM SA", NOT the inflation index.
+    # Inflation lives in the macro indicator table as an index of 100+x (103.10 -> +3.1% YoY).
     try:
         from bs4 import BeautifulSoup
         req = urllib.request.Request(
@@ -124,8 +124,8 @@ def _fetch_cpi(data: MacroData) -> None:
                 data.cpi_value = index_val
                 data.cpi_change_pct = round(index_val - 100, 2)  # indeks → % r/r
                 data.cpi_date = cells[1]
-                # Kolumna „Zmiana" = różnica wobec poprzedniego odczytu w p.p.
-                # Bez niej 3.0% wygląda „stabilnie", choć to skok z 2.5%.
+                # "Zmiana" column = difference against the previous reading, in percentage points.
+                # Without it 3.0% looks "stable", even though it is a jump from 2.5%.
                 if len(cells) >= 4:
                     with contextlib.suppress(ValueError):
                         data.cpi_change_pp = round(

@@ -6,9 +6,9 @@ from ...ticker_map import is_gpw, to_yahoo_ticker
 
 REQUIRED_COLUMNS = {"Date", "Open", "High", "Low", "Close", "Volume"}
 
-# Benchmarki do liczenia bety (rynek systematyczny).
-# WIG20.WA w yfinance daje tylko 1 dzień historii, więc dla GPW używamy EWP
-# (iShares MSCI Poland ETF, notowany w USA) jako proxy rynku polskiego.
+# Benchmarks for beta (systematic market risk).
+# WIG20.WA gives only 1 day of history in yfinance, so for GPW we use EWP
+# (iShares MSCI Poland ETF, listed in the US) as a proxy for the Polish market.
 BENCHMARK_GPW = "EWP"
 BENCHMARK_US = "^GSPC"
 _BENCHMARK_NAMES = {"EWP": "EWP (proxy GPW)", "^GSPC": "S&P 500"}
@@ -85,7 +85,7 @@ def _download_close(yahoo_symbol: str, days_back: int) -> pd.DataFrame:
 
 
 def fetch_close_series(yahoo_symbol: str, days_back: int = 90) -> pd.Series | None:
-    """Pobiera samą serię Close dla dowolnego symbolu Yahoo (np. indeksu/benchmarku)."""
+    """Fetches just the Close series for any Yahoo symbol (e.g. an index/benchmark)."""
     try:
         df = _download_close(yahoo_symbol, days_back)
         if df is None or df.empty:
@@ -97,7 +97,7 @@ def fetch_close_series(yahoo_symbol: str, days_back: int = 90) -> pd.Series | No
 
 
 def _last_expected_session(today: pd.Timestamp) -> pd.Timestamp:
-    """Ostatni dzień roboczy (pn–pt) nie późniejszy niż dziś."""
+    """Most recent weekday (Mon-Fri) no later than today."""
     day = today
     while day.weekday() >= 5:  # 5=sobota, 6=niedziela
         day -= pd.Timedelta(days=1)
@@ -105,13 +105,14 @@ def _last_expected_session(today: pd.Timestamp) -> pd.Timestamp:
 
 
 def data_staleness(df: pd.DataFrame) -> dict[str, object]:
-    """Sprawdza, jak świeża jest ostatnia świeca (yfinance bywa opóźniony/stale).
+    """Checks how fresh the last candle is (yfinance is often delayed or stale).
 
-    Liczy BRAKUJĄCE SESJE, nie dni kalendarzowe. Sam wiek w dniach nie wystarcza:
-    w sobotę brak piątkowej sesji daje age_days=2, więc stary próg (>4 dni) go
-    przepuszczał i cała analiza jechała na danych o sesję starszych, bez ostrzeżenia.
-    Dni wolne od handlu (święta) mogą dać fałszywy alarm — dlatego obok flagi
-    podajemy liczbę sesji i datę, żeby konsument mógł ocenić sam.
+    Counts MISSING SESSIONS, not calendar days. Age in days alone is not enough:
+    on a Saturday a missing Friday session gives age_days=2, so the old threshold
+    (>4 days) let it through and the whole analysis ran on data one session old
+    without a warning. Non-trading days (holidays) may raise a false alarm — which
+    is why we publish the session count and the date next to the flag, so the
+    consumer can judge for themselves.
     """
     last_date = pd.to_datetime(df["Date"].iloc[-1]).normalize()
     today = pd.Timestamp.now().normalize()

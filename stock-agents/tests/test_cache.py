@@ -18,7 +18,7 @@ def test_ttl_cache_memoizes_calls():
 
     assert expensive(3) == 6
     assert expensive(3) == 6
-    assert calls["n"] == 1  # drugie wywołanie z cache
+    assert calls["n"] == 1  # second call served from cache
 
 
 def test_ttl_cache_expires(monkeypatch):
@@ -34,10 +34,10 @@ def test_ttl_cache_expires(monkeypatch):
     f(1)
     t["now"] = 1005.0
     f(1)
-    assert calls["n"] == 1  # w oknie TTL
+    assert calls["n"] == 1  # within the TTL window
     t["now"] = 1020.0
     f(1)
-    assert calls["n"] == 2  # po wygaśnięciu
+    assert calls["n"] == 2  # after expiry
 
 
 def test_dataframe_result_is_copied():
@@ -46,9 +46,9 @@ def test_dataframe_result_is_copied():
         return pd.DataFrame({"a": [1, 2, 3]})
 
     df1 = make_df()
-    df1["a"] = [9, 9, 9]          # mutacja zwróconego obiektu
+    df1["a"] = [9, 9, 9]          # mutating the returned object
     df2 = make_df()
-    assert list(df2["a"]) == [1, 2, 3]  # cache nietknięty
+    assert list(df2["a"]) == [1, 2, 3]  # cache untouched
 
 
 def test_cache_disabled(monkeypatch):
@@ -62,4 +62,4 @@ def test_cache_disabled(monkeypatch):
 
     f(1)
     f(1)
-    assert calls["n"] == 2  # bez cache
+    assert calls["n"] == 2  # cache disabled

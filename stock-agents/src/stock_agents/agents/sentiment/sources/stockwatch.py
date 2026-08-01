@@ -11,8 +11,8 @@ _HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
     "Accept-Language": "pl-PL,pl;q=0.9",
 }
-# Tytuł ogólnego serwisu wiadomości — Stockwatch podstawia go zamiast 404,
-# gdy tag „walor" nie istnieje. Bez tej detekcji dostajemy losowe newsy z rynku.
+# Title of the generic news section — Stockwatch serves it instead of a 404
+# when the "walor" tag does not exist. Without this check we get random market news.
 _FALLBACK_TITLE_MARK = "giełda od fundament"
 
 
@@ -34,9 +34,9 @@ def fetch(ticker: str, company: str) -> SourceResult:
     except ImportError:
         return SourceResult(name="Stockwatch", error="beautifulsoup4 not installed")
 
-    # Strona tagu spółki zamiast wyszukiwarki pełnotekstowej: `?s=ALE` zwracało
-    # wszystko ze spójnikiem „ale" w slugu („Fed bez podwyżki, ALE rynek…”),
-    # bo filtr szukał tickera w dowolnym miejscu URL-a.
+    # Company tag page instead of full-text search: `?s=ALE` returned
+    # everything with the Polish conjunction "ale" in the slug ("Fed bez podwyżki, ALE rynek…"),
+    # because the filter looked for the ticker anywhere in the URL.
     slug = STOCKWATCH_SLUGS.get(ticker.upper(), ticker.lower())
     url = f"{_BASE}/wiadomosci/walor/{slug}"
     try:
@@ -61,7 +61,7 @@ def fetch(ticker: str, company: str) -> SourceResult:
         if not title_tag:
             continue
 
-        # Dodatkowe zabezpieczenie: artykuł musi być otagowany tą spółką.
+        # Extra safeguard: the article must be tagged with this company.
         tags = {a.get("href", "").rsplit("/", 1)[-1].lower()
                 for a in li.select("span.tags a[rel=tag]")}
         if tags and slug not in tags:

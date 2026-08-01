@@ -71,7 +71,7 @@ def print_compare(rows: list[dict]) -> None:
 
     col_w = max(14, 80 // (len(ok_rows) + 1))
 
-    # Nagłówek
+    # Header
     header = f"  {'METRYKA':<20}" + "".join(f"{r['ticker']:>{col_w}}" for r in ok_rows)
     print(header)
     print(f"  {'─'*20}" + "─" * (col_w * len(ok_rows)))
@@ -85,7 +85,7 @@ def print_compare(rows: list[dict]) -> None:
         f"{(r.get('sector', '') or '')[:col_w-2]:>{col_w}}" for r in ok_rows
     ))
 
-    # Cena / Kap
+    # Price / Cap
     print(f"  {'─'*20}" + "─" * (col_w * len(ok_rows)))
     print(f"  {'Cena':<20}" + "".join(
         f"{(_v(r.get('price'), '.2f') + ' ' + (r.get('currency') or '')):>{col_w}}" for r in ok_rows
@@ -109,7 +109,7 @@ def print_compare(rows: list[dict]) -> None:
     print(_row("P/S", ok_rows, "ps", lambda v: _v(v, ".2f"), higher_is_better=False, col_w=col_w))
     print(_row("EV/EBITDA", ok_rows, "ev_ebitda", lambda v: _v(v, ".1f"), higher_is_better=False, col_w=col_w))
 
-    # Rentowność
+    # Profitability
     print(f"  {'─'*20}" + "─" * (col_w * len(ok_rows)))
     print(f"  {'── RENTOWNOŚĆ ──':<20}")
     print(_row("ROE", ok_rows, "roe", _pct, higher_is_better=True, col_w=col_w))

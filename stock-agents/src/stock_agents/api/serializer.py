@@ -26,7 +26,7 @@ def to_json(obj: Any) -> Any:
         result = {}
         for f in dataclasses.fields(obj):
             result[f.name] = to_json(getattr(obj, f.name))
-        # dołącz @property zdefiniowane w klasie
+        # include @property members defined on the class
         for name in dir(type(obj)):
             if isinstance(getattr(type(obj), name, None), property):
                 with contextlib.suppress(Exception):

@@ -11,7 +11,7 @@ from stock_agents.api.schemas import (
 
 
 def test_technical_preserves_extra_fields():
-    # nowe pole agenta nie może zniknąć (extra="allow")
+    # a new agent field must not disappear (extra="allow")
     m = TechnicalResponse.model_validate(
         {"ticker": "CDR", "score": 5, "NOWE_POLE": 123, "risk": {"sharpe": 1.2, "EXTRA": 9}}
     )
@@ -22,7 +22,7 @@ def test_technical_preserves_extra_fields():
 
 
 def test_technical_error_only_response_validates():
-    # ścieżka błędu agenta: tylko ticker + error
+    # agent error path: ticker plus error only
     m = TechnicalResponse.model_validate({"ticker": "BADTICKER", "error": "Brak danych"})
     assert m.ticker == "BADTICKER"
     assert m.error == "Brak danych"
@@ -71,7 +71,7 @@ def test_screener_shape():
 
 
 def test_sentiment_computed_fields_preserved():
-    # pola z @property serializera muszą trafić do kontraktu
+    # fields from the serializer's @property must reach the contract
     m = SentimentResponse.model_validate({
         "ticker": "PKO", "company": "PKO", "mode": "keyword",
         "results": [{"name": "bankier", "mentions": [], "available": True, "bullish_count": 0}],

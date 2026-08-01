@@ -159,7 +159,7 @@ def print_fundamental(d: FundamentalData, signals: list[Signal]) -> None:
         _row("Dźwignia finansowa", f"{d.dupont_leverage:.2f}x")
         roe_check = d.dupont_margin * d.dupont_asset_turnover * d.dupont_leverage
         _row("ROE (kontrola)", _pct(roe_check))
-        # Komentarz: co napędza ROE
+        # Commentary: what drives ROE
         driver = ""
         if d.dupont_leverage > 3:
             driver = "napędzone głównie dźwignią"
@@ -199,7 +199,7 @@ def print_fundamental(d: FundamentalData, signals: list[Signal]) -> None:
     else:
         _row("Graham Number", "n/d (wymaga EPS > 0 i BVPS > 0)")
 
-    # Altman Z-Score (nie dotyczy banków i firm finansowych)
+    # Altman Z-Score (does not apply to banks and financial firms)
     if d.altman_z is not None:
         is_financial = "financial" in d.sector.lower() or "bank" in d.sector.lower()
         if is_financial:

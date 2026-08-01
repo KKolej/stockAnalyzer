@@ -45,7 +45,7 @@ def _fetch_one(ticker: str) -> ScreenerRow:
         w52_low = _safe_float(info, "fiftyTwoWeekLow")
         w52_change: float | None = None
         if price and w52_low and w52_high and w52_low > 0:
-            # Zmiana kursu od dołka 52W jako proxy momentum
+            # Price change off the 52W low as a momentum proxy
             w52_change = (price - w52_low) / w52_low
 
         fcf = _safe_float(info, "freeCashflow")
@@ -56,7 +56,7 @@ def _fetch_one(ticker: str) -> ScreenerRow:
         ev_ebitda = _safe_float(info, "enterpriseToEbitda")
         earnings_yield = (1.0 / ev_ebitda) if ev_ebitda and ev_ebitda > 0 else None
 
-        # Interest Coverage = EBIT / Interest Expense (z financials)
+        # Interest Coverage = EBIT / Interest Expense (from financials)
         interest_coverage: float | None = None
         try:
             fin = t.financials
@@ -116,7 +116,7 @@ def fetch_all(tickers: list[str], workers: int = 10) -> list[ScreenerRow]:
         results = []
         for future in concurrent.futures.as_completed(futures):
             results.append(future.result())
-    # Zachowaj kolejność wejściową
+    # Preserve input order
     order = {t.upper(): i for i, t in enumerate(tickers)}
     results.sort(key=lambda r: order.get(r.ticker, 999))
     return results

@@ -1,7 +1,7 @@
-"""Pydantic response models — kontrakt JSON dla endpointów (widoczny w /docs).
+"""Pydantic response models — the JSON contract for the endpoints (visible in /docs).
 
-Modele są tolerancyjne (pola opcjonalne, `extra="allow"`), by nie gubić danych
-przy rozwoju agentów, a jednocześnie dokumentować kontrakt dla konsumentów (n8n).
+The models are permissive (optional fields, `extra="allow"`) so agent development
+does not drop data, while still documenting the contract for consumers (n8n).
 """
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ class TechnicalSignal(_Base):
 
 class SRZone(_Base):
     price: float
-    touches: int = Field(description="liczba dotknięć poziomu = jego siła")
+    touches: int = Field(description="number of touches on the level = its strength")
     last_idx: int | None = None
     kind: str | None = Field(default=None, description="support | resistance")
     dist_pct: float | None = None
@@ -78,7 +78,7 @@ class SupportResistance(_Base):
 
 class Risk(_Base):
     period_days: int | None = None
-    ann_volatility: float | None = Field(default=None, description="zmienność roczna (ułamek)")
+    ann_volatility: float | None = Field(default=None, description="annualised volatility (fraction)")
     total_return: float | None = None
     cagr: float | None = None
     sharpe: float | None = None
@@ -121,7 +121,7 @@ class FundamentalSignal(_Base):
 
 
 class FundamentalData(_Base):
-    """Kluczowe pola; `extra=allow` przepuszcza pełen zestaw wskaźników agenta."""
+    """Key fields; `extra=allow` passes through the agent's full indicator set."""
     ticker: str | None = None
     company: str | None = None
     currency: str | None = None
@@ -190,11 +190,11 @@ class Order(_Base):
 
 
 class OrderRequest(BaseModel):
-    """Ciało POST /broker/orders. Podaj `qty` ALBO `notional`."""
-    symbol: str = Field(description="np. AAPL, TSLA")
+    """Body of POST /broker/orders. Pass `qty` OR `notional`."""
+    symbol: str = Field(description="e.g. AAPL, TSLA")
     side: str = Field(description="buy | sell")
-    qty: float | None = Field(default=None, description="liczba akcji")
-    notional: float | None = Field(default=None, description="kwota w USD (zamiast qty)")
+    qty: float | None = Field(default=None, description="share count")
+    notional: float | None = Field(default=None, description="amount in USD (instead of qty)")
     order_type: str = "market"
     time_in_force: str = "day"
     limit_price: float | None = None
@@ -204,9 +204,9 @@ class OrderRequest(BaseModel):
 # ── DCF ──────────────────────────────────────────────────────────────────────
 class DCFScenario(_Base):
     name: str = Field(description="Base | Bull | Bear")
-    fcf_growth: float = Field(description="roczny wzrost FCF w fazie 1 (ułamek)")
-    terminal_growth: float = Field(description="wzrost terminalny (ułamek)")
-    wacc: float = Field(description="stopa dyskontowa")
+    fcf_growth: float = Field(description="annual FCF growth in phase 1 (fraction)")
+    terminal_growth: float = Field(description="terminal growth (fraction)")
+    wacc: float = Field(description="discount rate")
     fair_value: float | None = None
     upside: float | None = Field(default=None, description="fair_value / price - 1")
 
@@ -216,7 +216,7 @@ class DCFResponse(_Base):
     company: str | None = None
     currency: str | None = None
     price: float | None = None
-    shares: float | None = Field(default=None, description="liczba akcji (szt.)")
+    shares: float | None = Field(default=None, description="share count (units)")
     fcf_ttm: float | None = Field(default=None, description="FCF za 12M")
     net_debt: float | None = None
     wacc_base: float | None = None
@@ -239,7 +239,7 @@ class PatternResult(_Base):
     direction: str = Field(description="UP | DOWN | NEUTRAL")
     strength: str = Field(description="strong | medium | weak")
     probability: float = Field(description="0.0–1.0 z danych historycznych")
-    sample_size: int = Field(description="liczba obserwacji")
+    sample_size: int = Field(description="number of observations")
     avg_return: float | None = None
     horizon_days: int | None = None
     note: str | None = None
@@ -287,14 +287,14 @@ class ScreenerRow(_Base):
     interest_coverage: float | None = None
     earnings_yield: float | None = Field(default=None, description="EBIT/EV (Magic Formula)")
     sector: str | None = None
-    magic_rank: int | None = Field(default=None, description="ranking Magic Formula (niższy = lepszy)")
+    magic_rank: int | None = Field(default=None, description="Magic Formula ranking (lower = better)")
     available: bool | None = None
     error: str | None = None
 
 
 class ScreenerResponse(_Base):
-    total: int = Field(description="liczba przeanalizowanych spółek")
-    matched: int = Field(description="liczba spełniających filtry")
+    total: int = Field(description="number of companies analysed")
+    matched: int = Field(description="number matching the filters")
     filters: dict[str, object] = {}
     rows: list[ScreenerRow] = []
     errors: list[ScreenerRow] = []
@@ -335,16 +335,16 @@ class SentimentResponse(_Base):
 class FxRate(_Base):
     code: str = Field(description="USD | EUR | CHF | GBP")
     name: str | None = None
-    rate: float = Field(description="PLN za 1 jednostkę")
+    rate: float = Field(description="PLN per 1 unit")
     date: str | None = None
-    change_3m: float | None = Field(default=None, description="% zmiana 3M")
+    change_3m: float | None = Field(default=None, description="% change 3M")
 
 
 class SectorPerf(_Base):
     name: str
     symbol: str
     price: float | None = None
-    change_1d: float | None = Field(default=None, description="% zmiana 1D")
+    change_1d: float | None = Field(default=None, description="% change 1D")
     pos_52w: float | None = Field(default=None, description="pozycja w zakresie 52W (0-100%)")
 
 
@@ -358,7 +358,7 @@ class MacroResponse(_Base):
     wig20_pos_52w: float | None = None
     sectors: list[SectorPerf] = []
     cpi_value: float | None = None
-    cpi_change_pct: float | None = Field(default=None, description="inflacja YoY %")
+    cpi_change_pct: float | None = Field(default=None, description="YoY inflation %")
     cpi_date: str | None = None
     errors: list[str] = []
 

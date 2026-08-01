@@ -15,7 +15,7 @@
         }
       },
       "id": "sched",
-      "name": "Codziennie 08:00",
+      "name": "Every day 08:00",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -38,7 +38,7 @@
         "options": {}
       },
       "id": "lista",
-      "name": "Lista spółek (edytuj)",
+      "name": "Ticker list (edit here)",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
@@ -48,10 +48,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// Lista spółek pochodzi z węzła \"Lista spółek (edytuj)\" — edytuj TAM, nie w kodzie.\nconst raw = $('Lista spółek (edytuj)').first().json.tickers || '';\nconst WIG20 = String(raw).split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);\nif (WIG20.length === 0) { throw new Error('Pusta lista spółek — uzupełnij węzeł \"Lista spółek (edytuj)\"'); }\nconst base = 'http://stock-api:8000';\nconst H = this.helpers;\nfunction sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }\n// Pobieramy SEKWENCYJNIE — równoległość wywala yfinance (401 \"Invalid Crumb\").\n// 1 retry z backoffem na wypadek chwilowej blokady. ~70s na całe WIG20.\nasync function g(path) {\n  for (let attempt = 0; attempt < 2; attempt++) {\n    try { return await H.httpRequest({ url: base + path, json: true, timeout: 60000 }); }\n    catch (e) {\n      if (attempt === 0) { await sleep(1200); continue; }\n      return { error: String((e && e.message) || e) };\n    }\n  }\n}\nconst macro = await g('/macro');\nconst spolki = [];\nfor (const t of WIG20) {\n  // WSZYSTKIE endpointy analizy per spółka\n  const technical = await g(`/technical/${t}`);\n  const fundamental = await g(`/fundamental/${t}`);\n  const dcf = await g(`/dcf/${t}`);\n  const sentiment = await g(`/sentiment/${t}`);\n  const speculator = await g(`/speculator/${t}`);\n  spolki.push({ ticker: t, technical, fundamental, dcf, sentiment, speculator });\n}\nconst kiedy = new Date().toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' });\nconst prompt =\n  `Dzienny przegląd WIG20. Data/godzina: ${kiedy}.\\n\\n` +\n  `KONTEKST MAKRO:\\n${JSON.stringify(macro, null, 1)}\\n\\n` +\n  `DANE SPÓŁEK (technical, fundamental, dcf, sentiment, speculator):\\n` +\n  `${JSON.stringify(spolki, null, 1)}`;\nreturn [{ json: { prompt, count: spolki.length } }];"
+        "jsCode": "// The ticker list comes from the \"Ticker list (edit here)\" node — edit it THERE, not in code.\nconst raw = $('Ticker list (edit here)').first().json.tickers || '';\nconst WIG20 = String(raw).split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);\nif (WIG20.length === 0) { throw new Error('Pusta lista spółek — uzupełnij węzeł \"Lista spółek (edytuj)\"'); }\nconst base = 'http://stock-api:8000';\nconst H = this.helpers;\nfunction sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }\n// Fetched SEQUENTIALLY — concurrency breaks yfinance (401 \"Invalid Crumb\").\n// One retry with backoff in case of a transient block. ~70s for the whole WIG20.\nasync function g(path) {\n  for (let attempt = 0; attempt < 2; attempt++) {\n    try { return await H.httpRequest({ url: base + path, json: true, timeout: 60000 }); }\n    catch (e) {\n      if (attempt === 0) { await sleep(1200); continue; }\n      return { error: String((e && e.message) || e) };\n    }\n  }\n}\nconst macro = await g('/macro');\nconst spolki = [];\nfor (const t of WIG20) {\n  // ALL analysis endpoints per company\n  const technical = await g(`/technical/${t}`);\n  const fundamental = await g(`/fundamental/${t}`);\n  const dcf = await g(`/dcf/${t}`);\n  const sentiment = await g(`/sentiment/${t}`);\n  const speculator = await g(`/speculator/${t}`);\n  spolki.push({ ticker: t, technical, fundamental, dcf, sentiment, speculator });\n}\nconst kiedy = new Date().toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' });\nconst prompt =\n  `Dzienny przegląd WIG20. Data/godzina: ${kiedy}.\\n\\n` +\n  `KONTEKST MAKRO:\\n${JSON.stringify(macro, null, 1)}\\n\\n` +\n  `DANE SPÓŁEK (technical, fundamental, dcf, sentiment, speculator):\\n` +\n  `${JSON.stringify(spolki, null, 1)}`;\nreturn [{ json: { prompt, count: spolki.length } }];"
       },
       "id": "collect",
-      "name": "Zbierz dane (sekwencyjnie)",
+      "name": "Fetch data (sequential)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -71,7 +71,7 @@
         }
       },
       "id": "claude",
-      "name": "Claude Code (przegląd)",
+      "name": "Claude Code (review)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
@@ -105,40 +105,40 @@
     }
   ],
   "connections": {
-    "Codziennie 08:00": {
+    "Every day 08:00": {
       "main": [
         [
           {
-            "node": "Lista spółek (edytuj)",
+            "node": "Ticker list (edit here)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Lista spółek (edytuj)": {
+    "Ticker list (edit here)": {
       "main": [
         [
           {
-            "node": "Zbierz dane (sekwencyjnie)",
+            "node": "Fetch data (sequential)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Zbierz dane (sekwencyjnie)": {
+    "Fetch data (sequential)": {
       "main": [
         [
           {
-            "node": "Claude Code (przegląd)",
+            "node": "Claude Code (review)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Claude Code (przegląd)": {
+    "Claude Code (review)": {
       "main": [
         [
           {

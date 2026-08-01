@@ -28,22 +28,22 @@ GPW_COMPANIES: dict[str, str] = {
 
 US_SUFFIX = ".US"
 GPW_SUFFIX = ".WA"
-# Tickery GPW których symbol w Yahoo Finance różni się od polskiego skrótu
+# GPW tickers whose Yahoo Finance symbol differs from the Polish abbreviation
 GPW_TICKER_OVERRIDES: dict[str, str] = {"KGHM": "KGH"}
 
-# Slug w URL Bankiera ≠ skrót GPW. UWAGA: /akcje/OPL to **Optopol Technology**
-# (spółka wycofana z GPW), NIE Orange Polska — bez tej mapy sentyment OPL
-# zaciągał newsy z 2009 r. o zupełnie innej spółce.
+# Slug in the Bankier URL != GPW abbreviation. CAUTION: /akcje/OPL is **Optopol
+# Technology** (delisted from GPW), NOT Orange Polska — without this map the OPL
+# sentiment pulled 2009 news about a completely different company.
 BANKIER_SLUGS: dict[str, str] = {
     "OPL": "ORANGEPL",
 }
 
-# Slug tagu „walor" na Stockwatch. Domyślnie działa sam ticker
-# (/wiadomosci/walor/<ticker>), mapa jest tylko dla wyjątków.
+# Slug of the "walor" tag on Stockwatch. The bare ticker works by default
+# (/wiadomosci/walor/<ticker>); the map covers exceptions only.
 STOCKWATCH_SLUGS: dict[str, str] = {}
 
-# Człony nazw zbyt ogólne, by potwierdzić tożsamość spółki na obcej stronie
-# ("Bank" pasuje do każdego banku, "Polska" do połowy GPW).
+# Name parts too generic to confirm a company's identity on a third-party page
+# ("Bank" matches every bank, "Polska" matches half of GPW).
 _GENERIC_NAME_TOKENS = {"bank", "banku", "polska", "polski", "grupa", "group",
                         "holding", "spolka", "spółka", "sa", "s.a."}
 
@@ -56,10 +56,10 @@ def ticker_to_company(ticker: str) -> str:
 
 
 def company_identity_tokens(ticker: str) -> list[str]:
-    """Człony nazwy spółki nadające się do potwierdzenia tożsamości strony.
+    """Company name parts usable for confirming a page's identity.
 
-    Używane przez scrapery do weryfikacji, że pobrana strona dotyczy TEJ spółki
-    (np. tytuł „Optopol Technology SA" nie zawiera żadnego członu „Orange Polska").
+    Used by the scrapers to verify that a fetched page describes THIS company
+    (e.g. the title "Optopol Technology SA" contains no part of "Orange Polska").
     """
     company = ticker_to_company(ticker)
     tokens = [t.strip(".,()").lower() for t in company.split()]
@@ -71,7 +71,7 @@ def is_gpw(ticker: str) -> bool:
 
 
 def to_yahoo_ticker(ticker: str) -> str:
-    """Konwertuje ticker wejściowy (np. PKO, CDR, TSLA.US) na symbol Yahoo Finance."""
+    """Converts an input ticker (e.g. PKO, CDR, TSLA.US) into a Yahoo Finance symbol."""
     upper = ticker.upper()
     if upper.endswith(US_SUFFIX):
         return upper.removesuffix(US_SUFFIX)

@@ -5,7 +5,7 @@ from .models import DCFResult, DCFScenario
 
 def _dcf_value(fcf_ttm: float, growth: float, terminal_growth: float,
                wacc: float, years: int, net_debt: float, shares: float) -> float | None:
-    """Zwraca wycenę DCF na akcję."""
+    """Returns the DCF valuation per share."""
     if wacc <= terminal_growth:
         return None
     if shares <= 0:
@@ -28,19 +28,19 @@ def _dcf_value(fcf_ttm: float, growth: float, terminal_growth: float,
 
 def _estimate_wacc(beta: float | None, debt_to_equity: float | None,
                    currency: str) -> float:
-    """Prosta aproksymacja WACC na podstawie beta i struktury kapitału."""
+    """Rough WACC approximation from beta and capital structure."""
     # Risk-free: ~4.5% USD, ~5.5% PLN
     rf = 0.055 if currency == "PLN" else 0.045
     erp = 0.055  # equity risk premium
     b = beta if beta and 0.3 <= beta <= 3.0 else 1.0
-    ke = rf + b * erp  # koszt kapitału własnego (CAPM)
+    ke = rf + b * erp  # cost of equity (CAPM)
 
     if debt_to_equity and debt_to_equity > 0:
-        # D/E w % → ułamek (yfinance podaje np. 50.0 = 50%)
+        # D/E in % -> fraction (yfinance reports e.g. 50.0 = 50%)
         de_frac = debt_to_equity / 100
         weight_e = 1 / (1 + de_frac)
         weight_d = de_frac / (1 + de_frac)
-        kd_after_tax = 0.05 * (1 - 0.19)  # koszt długu po podatku ~4%
+        kd_after_tax = 0.05 * (1 - 0.19)  # after-tax cost of debt ~4%
         wacc = weight_e * ke + weight_d * kd_after_tax
     else:
         wacc = ke
@@ -59,9 +59,9 @@ def build_scenarios(result: DCFResult, beta: float | None,
     price = result.price or 0.0
     years = result.projection_years
 
-    # DCF na ujemnym FCF nie ma sensu — projekcja ujemnych przepływów przy dodatnim
-    # wzroście daje ujemną "wycenę" i upside <-100%, co dla LLM wygląda jak realna
-    # liczba. Lepiej jasno oznaczyć brak zastosowania niż podać śmieciowy fair value.
+    # DCF on negative FCF makes no sense — projecting negative flows at a positive
+    # growth rate yields a negative "valuation" and upside <-100%, which looks to an LLM
+    # like a real number. Better to flag it as not applicable than return a junk fair value.
     if fcf is None or fcf <= 0:
         result.error = (
             "DCF nieadekwatny: ujemny lub zerowy FCF TTM "

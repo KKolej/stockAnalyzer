@@ -9,7 +9,7 @@ from ..serializer import to_json
 
 router = APIRouter(prefix="/screener", tags=["screener"])
 
-# Domyślne tickery GPW
+# Default GPW tickers
 _DEFAULT_TICKERS = [
     "PKO", "CDR", "KGHM", "PZU", "PKN", "LPP", "ALE", "DNP",
     "MBK", "OPL", "CPS", "JSW", "CCC", "BDX", "TPE", "PGE",

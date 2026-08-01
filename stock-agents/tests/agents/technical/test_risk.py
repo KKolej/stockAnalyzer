@@ -16,20 +16,20 @@ def _df(closes: list[float]) -> pd.DataFrame:
 
 
 def test_max_drawdown_simple():
-    # szczyt 100 → dołek 60 = -40%
+    # peak 100 -> trough 60 = -40%
     mdd = max_drawdown(pd.Series([50.0, 100.0, 80.0, 60.0, 70.0]))
     assert mdd is not None
     assert mdd["max_drawdown"] == -0.4
-    # bieżące obsunięcie: 70 vs szczyt 100 = -30%
+    # current drawdown: 70 vs peak 100 = -30%
     assert mdd["current_drawdown"] == -0.3
 
 
 def test_total_return_and_volatility_positive():
-    closes = list(np.linspace(100, 150, 60))  # stały wzrost
+    closes = list(np.linspace(100, 150, 60))  # steady growth
     r = compute_risk_metrics(_df(closes))
     assert r["total_return"] == round(150 / 100 - 1, 4)
     assert r["ann_volatility"] is not None and r["ann_volatility"] >= 0
-    assert r["positive_days_pct"] == 1.0  # zawsze rośnie
+    assert r["positive_days_pct"] == 1.0  # always rising
 
 
 def test_short_series_returns_nulls():

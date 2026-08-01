@@ -1,10 +1,10 @@
-"""Klient brokera Alpaca (REST) — stan konta + egzekucja zleceń.
+"""Alpaca broker client (REST) — account state and order execution.
 
-Domyślnie tryb **paper** (konto demo, zero realnych pieniędzy). Dane logowania
-wyłącznie z ENV (nigdy w kodzie/logach):
-    ALPACA_API_KEY, ALPACA_API_SECRET, ALPACA_PAPER (1=demo domyślnie, 0=real)
+Defaults to **paper** mode (demo account, no real money). Credentials come
+from ENV only (never from code or logs):
+    ALPACA_API_KEY, ALPACA_API_SECRET, ALPACA_PAPER (1=demo by default, 0=live)
 
-Alpaca: REST, US equities/crypto, darmowe konta paper. Dokumentacja: alpaca.markets/docs
+Alpaca: REST, US equities/crypto, free paper accounts. Docs: alpaca.markets/docs
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ LIVE_BASE = "https://api.alpaca.markets"
 
 
 class BrokerError(Exception):
-    """Błąd komunikacji z brokerem (brak danych logowania, HTTP, sieć)."""
+    """Broker communication failure (missing credentials, HTTP, network)."""
 
     def __init__(self, message: str, status: int | None = None):
         super().__init__(message)
@@ -98,7 +98,7 @@ def place_order(
     limit_price: float | None = None,
     stop_price: float | None = None,
 ) -> dict[str, Any]:
-    """Składa zlecenie. Podaj `qty` (liczba akcji) ALBO `notional` (kwota w USD)."""
+    """Places an order. Pass `qty` (share count) OR `notional` (USD amount)."""
     if qty is None and notional is None:
         raise BrokerError("Podaj qty (liczba akcji) lub notional (kwota USD)", status=400)
     body: dict[str, Any] = {

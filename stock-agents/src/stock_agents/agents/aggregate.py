@@ -1,7 +1,7 @@
-"""Zbiorcza analiza jednego tickera — spina wszystkich agentów w jeden werdykt.
+"""Aggregate analysis of one ticker — combines all agents into a single verdict.
 
-Uruchamia agentów współbieżnie (każdy odporny na własne błędy) i wylicza
-ważony werdykt zbiorczy. Zaprojektowane pod jeden endpoint API (`/analyze/{ticker}`).
+Runs the agents concurrently (each isolated from the others' failures) and computes
+a weighted aggregate verdict. Designed for one API endpoint (`/analyze/{ticker}`).
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from .sentiment.models import AnalysisMode
 from .speculator import agent as speculator
 from .technical import agent as technical
 
-# Wagi agentów w werdykcie zbiorczym (fundamenty ważą najwięcej w średnim terminie)
+# Agent weights in the aggregate verdict (fundamentals weigh most in the medium term)
 _WEIGHTS = {"fundamental": 2.0, "technical": 1.5, "dcf": 1.0, "sentiment": 1.0, "speculator": 1.0}
 
 
@@ -90,7 +90,7 @@ def _vote_speculator(sd: Any) -> float | None:
 
 
 def analyze(ticker: str, days: int = 180, sentiment_mode: AnalysisMode = AnalysisMode.KEYWORD) -> dict[str, Any]:
-    """Uruchamia wszystkich agentów dla tickera i zwraca dane + werdykt zbiorczy."""
+    """Runs every agent for the ticker and returns the data plus an aggregate verdict."""
     tasks = {
         "technical": lambda: technical.get_data(ticker, days),
         "fundamental": lambda: fundamental.get_data(ticker),
@@ -106,7 +106,7 @@ def analyze(ticker: str, days: int = 180, sentiment_mode: AnalysisMode = Analysi
             name = futures[fut]
             try:
                 results[name] = fut.result()
-            except Exception as exc:  # agent nie może wywrócić całości
+            except Exception as exc:  # a single agent must not flip the whole verdict
                 errors[name] = str(exc)
 
     tech = results.get("technical")

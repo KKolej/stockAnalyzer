@@ -64,5 +64,8 @@ Przy zmianach promptu nie usuwaj tych reguł — każda odpowiada konkretnej wpa
 
 ## Zmiana zestawu spółek
 
-W `wig20-daily.json`: węzeł **„Lista spółek (edytuj)”**, pole `tickers` (CSV).
-Nie w kodzie — węzeł `Zbierz dane` czyta listę stamtąd.
+W `wig20-daily.json`: węzeł **„Ticker list (edit here)”**, pole `tickers` (CSV).
+Nie w kodzie — węzeł `Fetch data (sequential)` czyta listę stamtąd.
+
+Nazwy węzłów i komentarze w kodzie są po angielsku (konwencja z `CLAUDE.md`);
+prompty i raport zostają po polsku.

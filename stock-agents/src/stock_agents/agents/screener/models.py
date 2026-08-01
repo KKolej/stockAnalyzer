@@ -24,8 +24,8 @@ class ScreenerRow:
     interest_coverage: float | None = None
     # Magic Formula (Greenblatt)
     earnings_yield: float | None = None    # EBIT/EV ≈ 1/EV_EBITDA proxy
-    sector: str | None = None       # do wykluczania finansów/utilities z Magic Formula
-    magic_rank: int | None = None   # ranking Magic Formula (niższy = lepszy)
+    sector: str | None = None       # used to exclude financials/utilities from the Magic Formula
+    magic_rank: int | None = None   # Magic Formula ranking (lower = better)
     error: str | None = None
 
     @property
@@ -44,7 +44,7 @@ class ScreenerFilters:
     div_min: float | None = None
     fcf_yield_min: float | None = None
     ic_min: float | None = None
-    magic_formula: bool = False           # włącz ranking Magic Formula
+    magic_formula: bool = False           # enable the Magic Formula ranking
     market_cap_min: float | None = None
     market_cap_max: float | None = None
     debt_max: float | None = None

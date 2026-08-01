@@ -10,7 +10,7 @@ from stock_agents.agents.speculator.gaming_events import (
 )
 from stock_agents.agents.speculator.patterns import analyze_gaming_event_runup
 
-_TODAY = date(2026, 7, 31)  # miesiąc przed Gamescomem 2026
+_TODAY = date(2026, 7, 31)  # a month before Gamescom 2026
 
 
 class TestIsGamingCompany:
@@ -20,16 +20,16 @@ class TestIsGamingCompany:
     def test_industry_lowercase(self):
         assert is_gaming_company("electronic gaming & multimedia")
 
-    def test_bank_nie_jest_gamingiem(self):
+    def test_bank_is_not_gaming(self):
         assert not is_gaming_company("Banks - Regional")
 
-    def test_brak_industry(self):
+    def test_missing_industry(self):
         assert not is_gaming_company(None)
         assert not is_gaming_company("")
 
 
 class TestGamingEventCatalysts:
-    def test_okno_przed_gamescomem(self):
+    def test_window_before_gamescom(self):
         out = gaming_event_catalysts(_TODAY)
         names = [c.name for c in out]
         assert any("Gamescom" in n for n in names)
@@ -50,13 +50,13 @@ class TestUpcomingRecurringEvents:
         assert all(d < date(2026, 8, 1) for d in past)
 
     def test_poza_oknem_pusto(self):
-        # tuż po TGA — najbliższe duże targi (Gamescom) dalej niż 120 dni
+        # right after TGA — the next big show (Gamescom) is more than 120 days away
         out = upcoming_recurring_events(date(2026, 12, 20), window_days=120)
         assert out == []
 
 
 def _synthetic_history(start: date, end: date, runup_before: list[date]) -> pd.DataFrame:
-    """Płaska cena 100, ale w 30 dniach przed każdą datą z runup_before rośnie do 110."""
+    """Flat price of 100, rising to 110 in the 30 days before each runup_before date."""
     rows = []
     d = start
     while d <= end:
@@ -83,10 +83,10 @@ class TestAnalyzeGamingEventRunup:
         assert r.sample_size >= 3
         assert r.avg_return is not None and r.avg_return > 0
 
-    def test_plaska_cena_bez_falszywego_up(self):
+    def test_flat_price_gives_no_false_up(self):
         df = _synthetic_history(date(2018, 1, 1), _TODAY, [])
         results = analyze_gaming_event_runup(df, today=_TODAY)
         assert all(r.direction != "UP" for r in results)
 
-    def test_pusty_df(self):
+    def test_empty_df(self):
         assert analyze_gaming_event_runup(pd.DataFrame(), today=_TODAY) == []

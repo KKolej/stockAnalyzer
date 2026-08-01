@@ -1,4 +1,4 @@
-"""Testy regresyjne dla wpadek, które przepuściły złe dane do przeglądu WIG20."""
+"""Regression tests for the slips that let bad data through to the WIG20 review."""
 from datetime import date
 
 import pandas as pd
@@ -14,10 +14,10 @@ def _df(last: str) -> pd.DataFrame:
 
 
 class TestStaleness:
-    def test_brak_piatkowej_sesji_w_sobote_jest_wykryty(self, monkeypatch):
-        # Realny przypadek: sobota 2026-08-01, ostatnia świeca z czwartku 30.07.
-        # Stary próg (age_days > 4) dawał age_days=2 → "świeże", i cały przegląd
-        # jechał na danych o sesję starszych, nie mówiąc o tym ani słowa.
+    def test_missing_friday_session_is_detected_on_saturday(self, monkeypatch):
+        # Real case: Saturday 2026-08-01, last candle from Thursday 30.07.
+        # The old threshold (age_days > 4) gave age_days=2 -> "fresh", and the whole review
+        # ran on data one session old without saying a word about it.
         monkeypatch.setattr(
             pd.Timestamp, "now", classmethod(lambda cls, *a, **k: pd.Timestamp("2026-08-01"))
         )
@@ -26,7 +26,7 @@ class TestStaleness:
         assert st["missing_sessions"] == 1
         assert st["is_stale"] is True
 
-    def test_piatkowa_sesja_w_sobote_jest_swieza(self, monkeypatch):
+    def test_friday_session_is_fresh_on_saturday(self, monkeypatch):
         monkeypatch.setattr(
             pd.Timestamp, "now", classmethod(lambda cls, *a, **k: pd.Timestamp("2026-08-01"))
         )
@@ -36,16 +36,16 @@ class TestStaleness:
 
 
 class TestCompanyIdentity:
-    def test_orange_ma_wlasny_slug_bankiera(self):
-        # /gielda/notowania/akcje/OPL to Optopol Technology, nie Orange Polska
+    def test_orange_has_its_own_bankier_slug(self):
+        # /gielda/notowania/akcje/OPL is Optopol Technology, not Orange Polska
         assert BANKIER_SLUGS["OPL"] == "ORANGEPL"
 
-    def test_tokeny_pomijaja_ogolniki(self):
-        # "Bank" pasowałby do każdego banku na GPW — nie nadaje się do weryfikacji
+    def test_tokens_skip_generic_words(self):
+        # "Bank" would match every bank on GPW — useless for verification
         assert company_identity_tokens("PEO") == ["pekao"]
         assert company_identity_tokens("ALR") == ["alior"]
 
-    def test_tokeny_orange_nie_pasuja_do_optopolu(self):
+    def test_orange_tokens_do_not_match_optopol(self):
         tokens = company_identity_tokens("OPL")
         assert tokens
         assert not any(t in "optopol technology sa (optopol)" for t in tokens)
@@ -59,21 +59,21 @@ def _pattern(name: str, **kw) -> PatternResult:
 
 
 class TestPatternGating:
-    def test_wzorzec_dywidendowy_bez_ex_div_nie_wchodzi_do_projekcji(self):
-        # CD Projekt cały zysk przeznaczył na kapitał zapasowy — nie ma ex-div,
-        # a "Post-div +7.5%" i tak napędzał projekcję na 2 miesiące.
+    def test_dividend_pattern_without_ex_div_is_excluded_from_projection(self):
+        # CD Projekt allocated all profit to reserve capital — there is no ex-div,
+        # yet "Post-div +7.5%" still drove the 2-month projection.
         p = _pattern("Post-div", requires_event="Ex-dywidenda", event_days_away=None)
         assert _relevant_patterns([p], 60) == []
 
-    def test_wzorzec_z_nadchodzacym_zdarzeniem_wchodzi(self):
+    def test_pattern_with_upcoming_event_is_included(self):
         p = _pattern("Post-div", requires_event="Ex-dywidenda", event_days_away=3)
         assert _relevant_patterns([p], 30) == [p]
 
-    def test_zdarzenie_poza_horyzontem_nie_wchodzi(self):
+    def test_event_beyond_horizon_is_excluded(self):
         p = _pattern("Pre-earnings drift", requires_event="Raport wynikowy", event_days_away=89)
         assert _relevant_patterns([p], 30) == []
 
-    def test_projekcje_sa_oznaczone_jako_niezbacktestowane(self):
+    def test_projections_are_flagged_as_not_backtested(self):
         proj = build_projections(
             [_pattern("Batting average")],
             [Catalyst(name="Raport wynikowy", event_date=date(2026, 8, 20),

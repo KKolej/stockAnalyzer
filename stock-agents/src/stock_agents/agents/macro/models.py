@@ -8,23 +8,23 @@ from datetime import date
 class FxRate:
     code: str            # USD, EUR, CHF, GBP
     name: str
-    rate: float          # PLN za 1 jednostkę
+    rate: float          # PLN per 1 unit
     date: str
-    change_3m: float | None = None   # % zmiana za 3M
+    change_3m: float | None = None   # % change over 3M
 
 
 @dataclass
 class SectorPerf:
-    name: str            # np. "Banki"
-    symbol: str          # np. "WIG-BANKI.WA"
+    name: str            # e.g. "Banki"
+    symbol: str          # e.g. "WIG-BANKI.WA"
     price: float
-    change_1d: float     # % zmiana 1D
-    pos_52w: float | None = None  # pozycja w zakresie 52W (0-100%)
+    change_1d: float     # % change 1D
+    pos_52w: float | None = None  # position within the 52W range (0-100%)
     low_52w: float | None = None
     high_52w: float | None = None
-    # Skąd zakres 52W: "biznesradar" (wiarygodne) albo None gdy nie udało się pobrać.
-    # yfinance dla indeksów PL podaje zakres jednodniowy jako "52-tygodniowy" —
-    # dlatego NIE używamy go tutaj w ogóle.
+    # Source of the 52W range: "biznesradar" (trustworthy) or None when the fetch failed.
+    # For Polish indices yfinance reports a single-day range as the "52-week" one —
+    # which is why we do not use it here at all.
     pos_52w_source: str | None = None
 
 
@@ -32,12 +32,12 @@ class SectorPerf:
 class MacroData:
     as_of: date
 
-    # Waluty (NBP)
+    # Currencies (NBP)
     fx: list[FxRate] = field(default_factory=list)
     gold_pln: float | None = None
     gold_date: str = ""
 
-    # Giełda
+    # Exchange
     wig20_price: float | None = None
     wig20_change_1d: float | None = None
     wig20_pos_52w: float | None = None
@@ -46,13 +46,13 @@ class MacroData:
     wig20_pos_52w_source: str | None = None
     sectors: list[SectorPerf] = field(default_factory=list)
 
-    # Inflacja (Biznesradar/GUS)
+    # Inflation (Biznesradar/GUS)
     cpi_value: float | None = None
     cpi_change_pct: float | None = None  # YoY %
-    # Zmiana odczytu r/r wobec poprzedniego miesiąca, w punktach procentowych.
-    # Bez tego pola nie da się odróżnić inflacji stabilnej od rosnącej.
+    # Change of the YoY reading against the previous month, in percentage points.
+    # Without this field there is no way to tell stable inflation from rising inflation.
     cpi_change_pp: float | None = None
-    cpi_mom_pct: float | None = None      # inflacja m/m w %
+    cpi_mom_pct: float | None = None      # month-over-month inflation in %
     cpi_date: str = ""
 
     errors: list[str] = field(default_factory=list)

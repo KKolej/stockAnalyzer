@@ -15,7 +15,7 @@ from .models import Catalyst, PatternResult
 
 _MIN_SAMPLE = 3
 
-# Mapy sektorów GPW dostępnych w yfinance
+# GPW sector indices available in yfinance
 _SECTOR_MAP: dict[str, str] = {
     "PKO": "WIG-BANKI.WA", "MBK": "WIG-BANKI.WA", "PZU": "WIG-BANKI.WA",
     "ALR": "WIG-BANKI.WA", "BNP": "WIG-BANKI.WA",
@@ -61,9 +61,9 @@ def _fetch_price_history(yahoo_ticker: str, years: int = 8) -> pd.DataFrame:
     return df[["Date", "Close", "Volume"]].dropna()
 
 
-# WIG20.WA w yfinance zwraca JEDEN wiersz historii, więc momentum względne
-# vs benchmark nigdy się nie liczyło (pattern cicho znikał z wyników). Dla GPW
-# używamy EWP (iShares MSCI Poland) — tak jak agent techniczny do liczenia bety.
+# WIG20.WA returns a SINGLE row of history in yfinance, so relative momentum
+# against the benchmark never got computed (the pattern quietly vanished). For GPW
+# we use EWP (iShares MSCI Poland) — same as the technical agent does for beta.
 _BENCH_GPW = "EWP"
 _BENCH_US = "^GSPC"
 
@@ -162,17 +162,17 @@ def analyze_earnings_pattern(df: pd.DataFrame, earnings: pd.DataFrame) -> list[P
                   f"/{len(pre_returns)} przypadkach (avg {avg*100:+.1f}%)"),
         ))
 
-    # Batting average — ważone magnitudą niespodzianki, nie tylko licznikiem
+    # Batting average — weighted by surprise magnitude, not just the beat count
     if len(surprises) >= _MIN_SAMPLE:
-        recent = surprises[:8]  # ostatnie 8 raportów ważniejsze
+        recent = surprises[:8]  # the last 8 reports matter more
         avg_surprise = sum(surprises) / len(surprises)
         avg_recent = sum(recent) / len(recent)
         beats = sum(1 for s in surprises if s > 0)
         beat_pct = beats / len(surprises)
 
-        # Kierunek oparty na średniej niespodziance (nie tylko na liczniku beatów)
+        # Direction based on the average surprise (not only on the beat count)
         direction = "UP" if avg_surprise > 0 else "DOWN"
-        # Siła = kombinacja beat% i magnitudy
+        # Strength = combination of beat rate and magnitude
         confidence = (beat_pct * 0.5 + (0.5 if avg_surprise > 0 else 0)) * min(abs(avg_surprise) / 10 + 0.5, 1.0)
         prob_dir = min(max(confidence, 0.4), 0.8)
         strength = "strong" if prob_dir >= 0.7 else "medium" if prob_dir >= 0.6 else "weak"
@@ -243,7 +243,7 @@ def analyze_52w_position(df: pd.DataFrame) -> PatternResult | None:
     return None
 
 
-# ── Momentum względne ────────────────────────────────────────────────────────
+# ── Relative momentum ────────────────────────────────────────────────────────
 
 def _relative_momentum(df: pd.DataFrame, ref: pd.DataFrame, days: int, label: str) -> PatternResult | None:
     if len(df) < days + 1 or len(ref) < days + 1:
@@ -286,7 +286,7 @@ def analyze_momentum(df: pd.DataFrame, benchmark: pd.DataFrame,
     return results
 
 
-# ── Sezonowość ───────────────────────────────────────────────────────────────
+# ── Seasonality ──────────────────────────────────────────────────────────────
 
 def analyze_seasonality(df: pd.DataFrame) -> PatternResult | None:
     if len(df) < 200:
@@ -327,15 +327,15 @@ def analyze_seasonality(df: pd.DataFrame) -> PatternResult | None:
     )
 
 
-# ── Run-up przed targami gier (backtest, tylko spółki gamingowe) ─────────────
+# ── Pre-show run-up (backtest, gaming companies only) ────────────────────────
 
 def analyze_gaming_event_runup(df: pd.DataFrame, today: date | None = None) -> list[PatternResult]:
-    """Backtest run-upu przed powtarzalnymi targami (Gamescom, TGS, TGA).
+    """Backtest of the run-up before recurring trade shows (Gamescom, TGS, TGA).
 
-    Dla każdych nadchodzących targów liczy z historii spółki zwrot w oknie
-    30 dni PRZED datą targów w poprzednich latach. Sygnał NEUTRAL też jest
-    emitowany — informacja "run-up historycznie nie występował" tonuje
-    katalizator i jest cenna dla LLM-a.
+    For every upcoming show it computes, from the company's history, the return in the
+    30-day window BEFORE the show date in previous years. A NEUTRAL signal is emitted
+    too — "the run-up historically did not happen" tempers the catalyst and is
+    valuable to the LLM.
     """
     results: list[PatternResult] = []
     if df.empty:
@@ -376,7 +376,7 @@ def analyze_gaming_event_runup(df: pd.DataFrame, today: date | None = None) -> l
     return results
 
 
-# ── Rekomendacje analityków (Biznesradar) ────────────────────────────────────
+# ── Analyst recommendations (Biznesradar) ────────────────────────────────────
 
 _REC_MAX_AGE_DAYS = 365
 _PL_MONTHS = {"sty": 1, "lut": 2, "mar": 3, "kwi": 4, "maj": 5, "cze": 6,
@@ -384,7 +384,7 @@ _PL_MONTHS = {"sty": 1, "lut": 2, "mar": 3, "kwi": 4, "maj": 5, "cze": 6,
 
 
 def _parse_br_date(text: str) -> date | None:
-    """Data z Biznesradaru: '13 lut 2026 00:00' → date(2026, 2, 13)."""
+    """Date from Biznesradar: '13 lut 2026 00:00' -> date(2026, 2, 13)."""
     m = re.match(r"(\d{1,2})\s+([a-ząćęłńóśźż]{3})\w*\s+(\d{4})", text.strip().lower())
     if not m:
         return None
@@ -417,10 +417,10 @@ def analyze_analyst_recommendations(ticker: str) -> PatternResult | None:
             cells = [td.get_text(strip=True) for td in row.find_all(["td", "th"])]
             if len(cells) < 6:
                 continue
-            # Kolumny: Rodzaj | Cena docelowa | Kurs akt. | CD/K | Kurs z dnia | Data
+            # Columns: Type | Target price | Current price | TP/P | Price on issue date | Date
             rec_date = _parse_br_date(cells[5])
-            # Bez filtra dat brało się 7 pierwszych wierszy niezależnie od wieku —
-            # KGHM dostawał „2 z 3 sprzedaj" z rekomendacji sprzed pół roku.
+            # Without a date filter this took the first 7 rows regardless of age —
+            # KGHM ended up with "2 of 3 sell" from recommendations half a year old.
             if rec_date is None or rec_date < cutoff:
                 skipped_old += 1
                 continue
@@ -444,7 +444,7 @@ def analyze_analyst_recommendations(ticker: str) -> PatternResult | None:
 
         direction = "UP" if buys > sells else "DOWN" if sells > buys else "NEUTRAL"
         raw_prob = buys / total if direction == "UP" else sells / total if direction == "DOWN" else 0.5
-        # Small-sample discount: przy małej liczbie rekomendacji ograniczamy pewność
+        # Small-sample discount: with few recommendations we cap the confidence
         confidence_cap = 0.5 + (raw_prob - 0.5) * min(total / 6, 1.0)
         prob = min(confidence_cap, 0.80)
         strength = "strong" if prob >= 0.72 else "medium" if prob >= 0.62 else "weak"
@@ -464,9 +464,9 @@ def analyze_analyst_recommendations(ticker: str) -> PatternResult | None:
         return None
 
 
-# ── Transakcje insiderów (Bankier) ───────────────────────────────────────────
+# ── Insider transactions (Bankier) ───────────────────────────────────────────
 
-# Mapowanie ticker → fragment nazwy w tabeli Bankier (uppercase)
+# Maps ticker -> name fragment in the Bankier table (uppercase)
 _BANKIER_NAME_MAP: dict[str, list[str]] = {
     "PKO":   ["PKO"],
     "CDR":   ["CDPROJEKT", "CD PROJEKT"],
@@ -514,20 +514,20 @@ def analyze_insider_transactions(ticker: str) -> PatternResult | None:
 
             rows = table.find_all("tr")[1:]
             page_found = 0
-            all_too_old = True  # czy wszystkie pasujące transakcje na tej stronie są sprzed cutoff
+            all_too_old = True  # whether every matching transaction on this page predates the cutoff
 
             for row in rows:
                 cells = [td.get_text(strip=True) for td in row.find_all(["td", "th"])]
                 if len(cells) < 6:
                     continue
 
-                spolka = cells[0].upper().replace(" ", "").replace(".", "")
-                match = any(n.replace(" ", "") in spolka or spolka.startswith(n.replace(" ", ""))
+                company_cell = cells[0].upper().replace(" ", "").replace(".", "")
+                match = any(n.replace(" ", "") in company_cell or company_cell.startswith(n.replace(" ", ""))
                             for n in names)
                 if not match:
                     continue
 
-                # Parsuj datę
+                # Parse the date
                 date_str = cells[6] if len(cells) > 6 else cells[-1]
                 try:
                     tx_date = date.fromisoformat(date_str.strip()[:10])
@@ -546,8 +546,8 @@ def analyze_insider_transactions(ticker: str) -> PatternResult | None:
                 except ValueError:
                     val = 0.0
 
-                # Kto zawarł transakcję (imię + funkcja) — bez tego nie da się
-                # odróżnić sprzedaży członka zarządu od pakietu funduszu (ABB).
+                # Who made the transaction (name plus role) — without it there is no way
+                # to tell a board member's sale from a fund's block trade (ABB).
                 who = re.sub(r"\s+", " ", cells[1]).strip()
 
                 if any(k in tx_type for k in ("kupno", "nabycie", "przejęcie", "objęcie")):
@@ -561,7 +561,7 @@ def analyze_insider_transactions(ticker: str) -> PatternResult | None:
                 else:
                     other += 1
 
-            # Jeśli na tej stronie nie było żadnej transakcji w oknie 90 dni — kończymy
+            # If this page had no transaction within the 90-day window, stop here
             if all_too_old and page_found == 0:
                 break
 
@@ -633,7 +633,7 @@ def get_catalysts(yahoo_ticker: str) -> list[Catalyst]:
     return sorted(catalysts, key=lambda c: c.days_away)
 
 
-# ── Główna funkcja ────────────────────────────────────────────────────────────
+# ── Main entry point ──────────────────────────────────────────────────────────
 
 def run_all_patterns(
     yahoo_ticker: str, ticker: str, industry: str | None = None,
@@ -682,8 +682,8 @@ def run_all_patterns(
             p.note += " — brak nadchodzącej ex-div, wzorzec bez triggera"
         patterns.append(p)
     for p in analyze_earnings_pattern(df, earnings):
-        # Sam „batting average" (skuteczność bicia konsensusu) opisuje reakcję na
-        # raport, ale nie jest wzorcem czasowym — gatujemy tylko drift przedwynikowy.
+        # "Batting average" alone (consensus beat rate) describes the reaction to a
+        # report, but it is not a time-based pattern — we gate only the pre-earnings drift.
         if p.name.startswith("Pre-earnings"):
             p.requires_event, p.event_days_away = "Raport wynikowy", earn_days
             if earn_days is None:

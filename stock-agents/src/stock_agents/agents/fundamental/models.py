@@ -38,7 +38,7 @@ class FundamentalData:
     ev_ebitda: float | None
     ps_ratio: float | None
 
-    # Wyniki bieżące
+    # Current results
     revenue: float | None
     ebitda: float | None
     eps: float | None
@@ -55,7 +55,7 @@ class FundamentalData:
     net_debt_ebitda: float | None
     interest_coverage: float | None    # EBIT / Interest Expense
 
-    # Przepływy pieniężne
+    # Cash flows
     fcf_ttm: float | None              # Free Cash Flow TTM
     fcf_yield: float | None            # FCF / Market Cap
     ev_fcf: float | None               # EV / FCF
@@ -63,7 +63,7 @@ class FundamentalData:
     # Dywidenda
     dividend_yield: float | None
     payout_ratio: float | None
-    dividend_cagr: float | None        # roczny wzrost dywidendy (5L)
+    dividend_cagr: float | None        # annual dividend growth (5Y)
 
     # Inne
     beta: float | None
@@ -71,23 +71,23 @@ class FundamentalData:
     week_52_low: float | None
     book_value: float | None
 
-    # Historia (ostatnie 5 lat, od najnowszego)
+    # History (last 5 years, newest first)
     history: list[YearlyRecord] = field(default_factory=list)
 
-    # Sektor (z yfinance)
+    # Sector (from yfinance)
     sector: str = ""
 
-    # DuPont decomposition (ROE = marża × rotacja aktywów × dźwignia)
-    dupont_margin: float | None = None         # marża netto
+    # DuPont decomposition (ROE = margin × asset turnover × leverage)
+    dupont_margin: float | None = None         # net margin
     dupont_asset_turnover: float | None = None # przychody / aktywa
-    dupont_leverage: float | None = None       # aktywa / kapitał własny
+    dupont_leverage: float | None = None       # assets / equity
 
     # Price to Cash Flow
-    price_to_cf: float | None = None           # cena / CFO na akcję
+    price_to_cf: float | None = None           # price / CFO per share
 
-    # Scoring (obliczane z danych finansowych)
-    piotroski_score: int | None = None          # 0–9 (lub mniej jeśli brak danych)
-    piotroski_max: int | None = None            # max możliwy wynik (brakujące kryteria obniżają)
+    # Scoring (computed from financial data)
+    piotroski_score: int | None = None          # 0-9 (or less when data is missing)
+    piotroski_max: int | None = None            # highest attainable score (missing criteria lower it)
     graham_number: float | None = None          # sqrt(22.5 × EPS × BVPS)
     altman_z: float | None = None               # Z'' score
     peg_ratio: float | None = None              # P/E / CAGR zysku

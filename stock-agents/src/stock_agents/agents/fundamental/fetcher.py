@@ -12,7 +12,7 @@ from .sources.biznesradar import FIELD_MAP
 from .sources.biznesradar import fetch_history as br_history
 from .sources.biznesradar import fetch_snapshot as br_snapshot
 
-# Mapowanie wewnętrznych nazw z FIELD_MAP → pola FundamentalData (bez konwersji)
+# Maps internal FIELD_MAP names to FundamentalData fields (no conversion)
 _BR_DIRECT: dict[str, str] = {
     "pe_trailing":        "pe_trailing",
     "pb":                 "pb",
@@ -22,7 +22,7 @@ _BR_DIRECT: dict[str, str] = {
     "debt_to_equity_raw": "debt_to_equity",
     "net_debt_ebitda":    "net_debt_ebitda",
 }
-# Pola procentowe z Biznesradar (wartość w %, model przechowuje jako ułamek)
+# Percentage fields from Biznesradar (value in %, model stores a fraction)
 _BR_PCT: dict[str, str] = {
     "roe_pct":              "roe",
     "roa_pct":              "roa",
@@ -66,7 +66,7 @@ def _empty(ticker: str, company: str, error: str) -> FundamentalData:
 
 
 def _col_get(df, col: object, *rows: str) -> float | None:
-    """Wyciąga wartość z DataFrame df dla danej kolumny i pierwszego pasującego wiersza."""
+    """Extracts a value from DataFrame df for the given column and first matching row."""
     for r in rows:
         try:
             v = df.loc[r, col]
@@ -78,12 +78,12 @@ def _col_get(df, col: object, *rows: str) -> float | None:
 
 
 def _col_for_col(col: object, df, *rows: str) -> float | None:
-    """Wariant `_col_get` z kolumną jako pierwszym argumentem (do `functools.partial`)."""
+    """Variant of `_col_get` with the column first (for `functools.partial`)."""
     return _col_get(df, col, *rows)
 
 
 def _yf_history(ticker: str) -> list[YearlyRecord]:
-    """Pobiera dane roczne z yfinance (dla akcji US)."""
+    """Fetches annual data from yfinance (for US stocks)."""
     try:
         t = yf.Ticker(to_yahoo_ticker(ticker))
         fin = t.financials
@@ -168,7 +168,7 @@ def _from_yfinance(ticker: str, company: str) -> FundamentalData:
 
 
 def _overlay_biznesradar(d: FundamentalData, ticker: str) -> FundamentalData:
-    """Nadpisuje pola yfinance danymi z Biznesradar (GPW ma lepsze dane na BR niż YF)."""
+    """Overrides yfinance fields with Biznesradar data (GPW data is better on BR than YF)."""
     raw = br_snapshot(ticker)
     if not raw:
         return d
@@ -188,7 +188,7 @@ def _overlay_biznesradar(d: FundamentalData, ticker: str) -> FundamentalData:
 
 
 def _calc_scores(data: FundamentalData, yahoo_ticker: str) -> FundamentalData:
-    """Oblicza scoring, DuPont, P/CF i pochodne wskaźniki."""
+    """Computes scoring, DuPont, P/CF and derived ratios."""
     t = yf.Ticker(yahoo_ticker)
     try:
         info = t.info or {}
@@ -198,9 +198,9 @@ def _calc_scores(data: FundamentalData, yahoo_ticker: str) -> FundamentalData:
     except Exception:
         return data
 
-    # ── DuPont Analysis (ROE = marża × rotacja × dźwignia) ──────────────────
-    # Wszystkie trzy czynniki liczone z tego samego bilansu, by iloczyn był spójny:
-    # (NI/Rev) × (Rev/Aktywa) × (Aktywa/Kapitał) = NI/Kapitał = ROE.
+    # ── DuPont analysis (ROE = margin × turnover × leverage) ────────────────
+    # All three factors come from the same balance sheet so the product stays consistent:
+    # (NI/Rev) × (Rev/Assets) × (Assets/Equity) = NI/Equity = ROE.
     if data.profit_margin is not None:
         data.dupont_margin = data.profit_margin
     assets_dup: float | None = None
@@ -212,7 +212,7 @@ def _calc_scores(data: FundamentalData, yahoo_ticker: str) -> FundamentalData:
                     data.dupont_asset_turnover = data.revenue / assets_dup
         except Exception:
             pass
-    # Dźwignia = aktywa / kapitał własny (equity multiplier — zawsze ≥ 1)
+    # Leverage = assets / equity (equity multiplier — always >= 1)
     if assets_dup and assets_dup > 0 and bs is not None and not bs.empty:
         try:
             equity_dup = None
@@ -305,7 +305,7 @@ def _calc_scores(data: FundamentalData, yahoo_ticker: str) -> FundamentalData:
 
     # ── Altman Z'' Score (non-financial, non-manufacturing) ──────────────────
     # Z'' = 6.56*X1 + 3.26*X2 + 6.72*X3 + 1.05*X4
-    # X1 = Working Capital / Total Assets  (poziom WC z bilansu, NIE zmiana z CF)
+    # X1 = Working Capital / Total Assets (WC level from the balance sheet, NOT the CF change)
     # X2 = Retained Earnings / Total Assets
     # X3 = EBIT / Total Assets
     # X4 = Book Value Equity / Total Liabilities
@@ -350,12 +350,12 @@ def _calc_scores(data: FundamentalData, yahoo_ticker: str) -> FundamentalData:
     if ebit_ic and interest_exp and abs(interest_exp) > 0:
         data.interest_coverage = round(ebit_ic / abs(interest_exp), 2)
 
-    # ── FCF TTM z cashflow (dla GPW gdzie yfinance nie daje freeCashflow) ─────
+    # ── TTM FCF from cash flow (for GPW, where yfinance has no freeCashflow) ──
     if data.fcf_ttm is None and cf is not None and not cf.empty:
         op_cf_ttm = gf(cf, "Operating Cash Flow")
         capex_ttm = gf(cf, "Capital Expenditure")
         if op_cf_ttm is not None and capex_ttm is not None:
-            data.fcf_ttm = op_cf_ttm + capex_ttm  # capex w yfinance jest ujemny
+            data.fcf_ttm = op_cf_ttm + capex_ttm  # capex is negative in yfinance
         elif op_cf_ttm is not None:
             data.fcf_ttm = op_cf_ttm
 
@@ -368,7 +368,7 @@ def _calc_scores(data: FundamentalData, yahoo_ticker: str) -> FundamentalData:
     if fcf and fcf > 0 and ev_val and ev_val > 0:
         data.ev_fcf = round(ev_val / fcf, 2)
 
-    # ── Dividend CAGR (z historii dywidend yfinance) ──────────────────────────
+    # ── Dividend CAGR (from yfinance dividend history) ────────────────────────
     try:
         divs = t.dividends
         if divs is not None and len(divs) >= 4:

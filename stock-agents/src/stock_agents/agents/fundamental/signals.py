@@ -322,7 +322,7 @@ def altman_signal(d: FundamentalData) -> Signal | None:
     z = d.altman_z
     if z is None:
         return None
-    # Banki i firmy finansowe mają naturalnie niskie Z — formuła nie ma zastosowania
+    # Banks and financial firms naturally score low on Z — the formula does not apply
     if "financial" in d.sector.lower() or "bank" in d.sector.lower():
         return None
     if z > 2.99:

@@ -1,7 +1,7 @@
-"""Metryki ryzyka i zwrotu z serii cen (standard profesjonalny).
+"""Risk and return metrics from a price series (professional standard).
 
-Zmienność roczna, maksymalne obsunięcie (max drawdown), Sharpe, Sortino,
-beta względem benchmarku oraz statystyki zwrotów. Czysta funkcja — bez sieci.
+Annualised volatility, max drawdown, Sharpe, Sortino, beta against a benchmark
+and return statistics. A pure function — no network access.
 """
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 TRADING_DAYS = 252
-DEFAULT_RISK_FREE = 0.045  # roczna stopa wolna od ryzyka (przybliżenie)
+DEFAULT_RISK_FREE = 0.045  # annual risk-free rate (approximation)
 
 
 def _daily_returns(close: pd.Series) -> pd.Series:
@@ -19,7 +19,7 @@ def _daily_returns(close: pd.Series) -> pd.Series:
 
 
 def max_drawdown(close: pd.Series) -> dict[str, float] | None:
-    """Największe obsunięcie szczyt→dołek oraz bieżące obsunięcie od szczytu."""
+    """Largest peak-to-trough drawdown and the current drawdown from the peak."""
     c = close.astype(float).dropna()
     if len(c) < 2:
         return None
@@ -38,10 +38,10 @@ def _to_naive_dates(idx: pd.Index) -> pd.Index:
 
 
 def beta(stock_close: pd.Series, benchmark_close: pd.Series) -> float | None:
-    """Beta = cov(akcja, benchmark) / var(benchmark) na wspólnych datach."""
+    """Beta = cov(stock, benchmark) / var(benchmark) over shared dates."""
     s = _daily_returns(stock_close)
     b = _daily_returns(benchmark_close)
-    # wyrównanie po dacie, gdy serie są indeksowane czasem (różne strefy/godziny)
+    # align on date when the series are time-indexed (different zones/hours)
     if isinstance(s.index, pd.DatetimeIndex):
         s.index = _to_naive_dates(s.index)
     if isinstance(b.index, pd.DatetimeIndex):
@@ -51,7 +51,7 @@ def beta(stock_close: pd.Series, benchmark_close: pd.Series) -> float | None:
         return None
     sv = joined.iloc[:, 0].to_numpy()
     bv = joined.iloc[:, 1].to_numpy()
-    # spójne ddof=1 dla cov i var (inaczej beta serii tożsamej ≠ 1)
+    # consistent ddof=1 for cov and var (otherwise beta of an identical series != 1)
     var_b = float(np.var(bv, ddof=1))
     if var_b <= 0:
         return None
@@ -65,7 +65,7 @@ def compute_risk_metrics(
     risk_free: float = DEFAULT_RISK_FREE,
     periods_per_year: int = TRADING_DAYS,
 ) -> dict[str, Any]:
-    """Zwraca komplet metryk ryzyka/zwrotu dla serii Close w df."""
+    """Returns the full set of risk/return metrics for the Close series in df."""
     close = df["Close"].astype(float).dropna()
     out: dict[str, Any] = {
         "period_days": int(len(close)),
@@ -118,7 +118,7 @@ def compute_risk_metrics(
     out["positive_days_pct"] = round(float((rets > 0).mean()), 4)
 
     if benchmark_close is not None:
-        # cena akcji zindeksowana po dacie — do wyrównania z benchmarkiem
+        # share price indexed by date — for aligning with the benchmark
         if "Date" in df.columns:
             dated = df[["Date", "Close"]].dropna()
             stock_dated = pd.Series(

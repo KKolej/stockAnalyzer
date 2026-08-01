@@ -8,8 +8,8 @@ from datetime import UTC, datetime
 from ..models import Mention, SentimentLabel, SourceResult
 
 _SUBREDDITS = ["wallstreetbets", "investing", "stocks", "polish_stocks", "gielda"]
-# TODO: Reddit wymaga OAuth2 od 2023 — zarejestruj app na old.reddit.com/prefs/apps (typ: skrypt),
-# wrzuć REDDIT_CLIENT_ID i REDDIT_CLIENT_SECRET do env, zaimplementuj client_credentials flow.
+# TODO: Reddit has required OAuth2 since 2023 — register an app at old.reddit.com/prefs/apps (type: script),
+# put REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET in env, implement the client_credentials flow.
 _HEADERS = {"User-Agent": "stock-agents/1.0 (sentiment analysis)"}
 _MAX_POSTS = 25
 

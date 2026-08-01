@@ -25,7 +25,7 @@ def _fetch_one(ticker: str) -> dict:
                         pass
             return None
 
-        # FCF IC z financials
+        # FCF and IC from financials
         interest_coverage: float | None = None
         try:
             fin = t.financials

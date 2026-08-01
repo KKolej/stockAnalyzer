@@ -57,7 +57,7 @@ def _context_signals(d: MacroData) -> list[tuple[str, str]]:
         elif d.wig20_pos_52w < 20:
             signals.append(("▼", f"WIG20 blisko dna 52W ({d.wig20_pos_52w:.0f}%) — rynek w korekcie"))
 
-    # Najsilniejszy/najsłabszy sektor
+    # Strongest/weakest sector
     if d.sectors:
         best = max(d.sectors, key=lambda s: s.change_1d)
         worst = min(d.sectors, key=lambda s: s.change_1d)
@@ -74,7 +74,7 @@ def print_macro(d: MacroData) -> None:
     print(f"  MAKRO GPW  —  {d.as_of}")
     print(SEP)
 
-    # ── Waluty ──────────────────────────────────────────────────────────────
+    # ── Currencies ──────────────────────────────────────────────────────────
     print("\n  ▸ KURSY WALUT (NBP)")
     print(f"  {'─' * 50}")
     for fx in d.fx:
@@ -83,7 +83,7 @@ def print_macro(d: MacroData) -> None:
     if d.gold_pln:
         print(f"  Złoto      {d.gold_pln:.2f} PLN/g  ({d.gold_date})")
 
-    # ── Inflacja ─────────────────────────────────────────────────────────────
+    # ── Inflation ────────────────────────────────────────────────────────────
     print("\n  ▸ INFLACJA CPI (GUS/Biznesradar)")
     print(f"  {'─' * 50}")
     if d.cpi_change_pct is not None:
@@ -91,7 +91,7 @@ def print_macro(d: MacroData) -> None:
     else:
         print("  CPI: brak danych")
 
-    # ── Giełda ───────────────────────────────────────────────────────────────
+    # ── Exchange ─────────────────────────────────────────────────────────────
     print("\n  ▸ WIG20")
     print(f"  {'─' * 50}")
     if d.wig20_price:
@@ -106,7 +106,7 @@ def print_macro(d: MacroData) -> None:
     if d.sectors:
         print("\n  ▸ SEKTORY GPW (zmiana 1D)")
         print(f"  {'─' * 50}")
-        # Sortuj malejąco po zmianie
+        # Sort descending by change
         for s in sorted(d.sectors, key=lambda x: x.change_1d, reverse=True):
             arrow = _sector_arrow(s.change_1d)
             bar = _bar(s.pos_52w, 12)

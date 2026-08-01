@@ -32,7 +32,7 @@ def fetch(ticker: str, projection_years: int = 10) -> DCFResult:
                 error="Brak danych cenowych lub akcji",
             )
 
-        # FCF z info lub z cashflow statement
+        # FCF from info or from the cash flow statement
         fcf: float | None = float(fcf_raw) if fcf_raw is not None else None
         if fcf is None:
             try:
@@ -46,7 +46,7 @@ def fetch(ticker: str, projection_years: int = 10) -> DCFResult:
                     op = _cf("Operating Cash Flow") or _cf("Total Cash From Operating Activities")
                     cap = _cf("Capital Expenditure") or _cf("Capital Expenditures")
                     if op is not None and cap is not None:
-                        fcf = op + cap  # capex jest ujemny w yfinance
+                        fcf = op + cap  # capex is negative in yfinance
             except Exception:
                 pass
 

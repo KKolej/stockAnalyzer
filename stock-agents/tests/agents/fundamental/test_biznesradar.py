@@ -6,19 +6,19 @@ from stock_agents.agents.fundamental.sources.biznesradar import (
 
 
 class TestParseNumber:
-    def test_spacja_jako_separator_tysiecy(self):
-        # Kluczowa pułapka Biznesradar: "2 027" to 2027, nie 2!
+    def test_space_as_thousands_separator(self):
+        # Key Biznesradar trap: "2 027" is 2027, not 2!
         assert _parse_number("2 027") == 2027.0
         assert _parse_number("1 234 567") == 1234567.0
 
-    def test_nbsp_jako_separator(self):
+    def test_nbsp_as_separator(self):
         assert _parse_number("2\xa0027") == 2027.0
 
-    def test_przecinek_jako_dziesietne(self):
+    def test_comma_as_decimal_point(self):
         assert _parse_number("12,34") == 12.34
         assert _parse_number("1 234,56") == 1234.56
 
-    def test_kropka_przy_przecinku_to_tysiace(self):
+    def test_dot_next_to_comma_is_thousands(self):
         assert _parse_number("1.234,56") == 1234.56
 
     def test_liczby_ujemne(self):
@@ -59,10 +59,10 @@ class TestExtractNewest:
         assert out["Cena / Zysk"] == 12.30
         assert out["ROE"] == 15.20
 
-    def test_wiersz_bez_newest_pomijany(self):
+    def test_row_without_newest_is_skipped(self):
         assert "Bez wartości" not in _extract_newest(_SNAPSHOT_HTML)
 
-    def test_brak_tabeli_pusty_dict(self):
+    def test_missing_table_returns_empty_dict(self):
         assert _extract_newest("<html><body>nic</body></html>") == {}
 
 
@@ -102,12 +102,12 @@ class TestExtractHistoryTable:
         years, _ = _extract_history_table(_HISTORY_HTML)
         assert "zmiana" not in years
 
-    def test_limit_n_ostatnich_lat(self):
+    def test_limit_to_last_n_years(self):
         years, data = _extract_history_table(_HISTORY_HTML, n=2)
         assert years == ["2023", "2024"]
         assert data["Przychody ze sprzedaży"] == [1500.0, 2027.0]
 
-    def test_kwartalne_q4_jako_fallback(self):
+    def test_quarterly_q4_as_fallback(self):
         html = _HISTORY_HTML.replace("2022(gru 22)", "2022/Q4(gru 22)") \
                             .replace("2023(gru 23)", "2023/Q4(gru 23)") \
                             .replace("2024(gru 24)", "2024/Q4(gru 24)")
@@ -115,5 +115,5 @@ class TestExtractHistoryTable:
         assert years == ["2022", "2023", "2024"]
         assert data["Zysk netto"] == [100.0, -50.0, 200.0]
 
-    def test_brak_tabeli(self):
+    def test_missing_table(self):
         assert _extract_history_table("<html></html>") == ([], {})

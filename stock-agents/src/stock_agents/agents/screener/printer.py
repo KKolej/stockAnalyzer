@@ -86,7 +86,7 @@ def print_screener(
         print(SEPARATOR)
         return
 
-    # Nagłówek
+    # Header
     h = (f"  {'#':>3}  {'TICKER':<8} {'NAZWA':<26} {'CENA':>8}  "
          f"{'P/E':>6} {'P/B':>5} {'ROE':>6} {'MARŻA':>6} {'DYW':>5} "
          f"{'FCFYld':>6} {'IC':>6} {'KAP':>6} {'52W↑':>5}")

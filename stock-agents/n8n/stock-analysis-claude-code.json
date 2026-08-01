@@ -19,10 +19,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// Wolne pytanie z czatu → lista tickerów + oryginalna treść pytania.\n// Wcześniej całe `chatInput` szło jako ticker, więc każde zdanie rozwalało endpointy.\nconst raw = String($json.chatInput || $json.ticker || '').trim();\nif (!raw) { throw new Error('Puste pytanie.'); }\n\nconst ZNANE = ['PKO','PEO','PKN','PZU','KGHM','KGH','DNP','ALE','CDR','LPP','SPL','PGE',\n  'CPS','OPL','KTY','MBK','BDX','PCO','KRU','ALR','ZAB','JSW','CCC','EUR','GTC','TPE','ENG'];\n\n// „ALE\" to ticker Allegro, ale też polski spójnik („kupić PKO, ale nie teraz”).\n// Dlatego najpierw szukamy tickerów pisanych WIELKIMI literami w oryginale.\nconst DWUZNACZNE = ['ALE', 'EUR'];\nconst WZOR = /\\b[A-Z][A-Z0-9]{1,5}(?:\\.US)?\\b/g;\n\nconst zOryginalu = raw.match(WZOR) || [];\nlet tickers = [...new Set(zOryginalu.filter((t) => ZNANE.includes(t) || t.endsWith('.US')))];\n\n// Dopiero gdy nic nie ma — próba bez rozróżniania wielkości liter („co z mbk?”),\n// z pominięciem tokenów dwuznacznych.\nif (tickers.length === 0) {\n  const zWielkich = raw.toUpperCase().match(WZOR) || [];\n  tickers = [...new Set(zWielkich.filter(\n    (t) => (ZNANE.includes(t) && !DWUZNACZNE.includes(t)) || t.endsWith('.US'),\n  ))];\n}\n\n// Fallback: samotny token bez spacji traktujemy jak ticker (stare zachowanie).\nif (tickers.length === 0 && /^[A-Z0-9.]{2,8}$/.test(raw.toUpperCase())) {\n  tickers = [raw.toUpperCase()];\n}\nif (tickers.length === 0) {\n  throw new Error('Nie rozpoznałem tickera w pytaniu. Podaj np. CDR, PKO albo TSLA.US.');\n}\n\nreturn [{ json: { pytanie: raw, tickers: tickers.slice(0, 3) } }];\n"
+        "jsCode": "// Free-form chat question -> ticker list plus the original question text.\n// Previously the whole `chatInput` was used as the ticker, so any sentence broke the endpoints.\nconst raw = String($json.chatInput || $json.ticker || '').trim();\nif (!raw) { throw new Error('Puste pytanie.'); }\n\nconst ZNANE = ['PKO','PEO','PKN','PZU','KGHM','KGH','DNP','ALE','CDR','LPP','SPL','PGE',\n  'CPS','OPL','KTY','MBK','BDX','PCO','KRU','ALR','ZAB','JSW','CCC','EUR','GTC','TPE','ENG'];\n\n// \"ALE\" is both Allegro's ticker and a Polish conjunction (\"kupić PKO, ale nie teraz\").\n// So we first look for tickers written in UPPERCASE in the original text.\nconst DWUZNACZNE = ['ALE', 'EUR'];\nconst WZOR = /\\b[A-Z][A-Z0-9]{1,5}(?:\\.US)?\\b/g;\n\nconst zOryginalu = raw.match(WZOR) || [];\nlet tickers = [...new Set(zOryginalu.filter((t) => ZNANE.includes(t) || t.endsWith('.US')))];\n\n// Only when nothing matches do we retry case-insensitively (\"co z mbk?\"),\n// skipping the ambiguous tokens.\nif (tickers.length === 0) {\n  const zWielkich = raw.toUpperCase().match(WZOR) || [];\n  tickers = [...new Set(zWielkich.filter(\n    (t) => (ZNANE.includes(t) && !DWUZNACZNE.includes(t)) || t.endsWith('.US'),\n  ))];\n}\n\n// Fallback: a lone token with no spaces is treated as a ticker (legacy behaviour).\nif (tickers.length === 0 && /^[A-Z0-9.]{2,8}$/.test(raw.toUpperCase())) {\n  tickers = [raw.toUpperCase()];\n}\nif (tickers.length === 0) {\n  throw new Error('Nie rozpoznałem tickera w pytaniu. Podaj np. CDR, PKO albo TSLA.US.');\n}\n\nreturn [{ json: { pytanie: raw, tickers: tickers.slice(0, 3) } }];\n"
       },
       "id": "rozpoznaj",
-      "name": "Rozpoznaj pytanie",
+      "name": "Parse question",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -32,10 +32,10 @@
     },
     {
       "parameters": {
-        "jsCode": "const pytanie = $json.pytanie;\nconst tickers = $json.tickers;\nconst base = 'http://stock-api:8000';\nconst H = this.helpers;\nfunction sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }\n\n// Sekwencyjnie — równoległość wywala yfinance (401 \"Invalid Crumb\"). 1 retry z backoffem.\nasync function g(path) {\n  for (let attempt = 0; attempt < 2; attempt++) {\n    try { return await H.httpRequest({ url: base + path, json: true, timeout: 60000 }); }\n    catch (e) {\n      if (attempt === 0) { await sleep(1200); continue; }\n      return { error: String((e && e.message) || e) };\n    }\n  }\n}\n\nconst macro = await g('/macro');\nconst spolki = [];\nfor (const t of tickers) {\n  spolki.push({\n    ticker: t,\n    technical: await g(`/technical/${t}`),\n    fundamental: await g(`/fundamental/${t}`),\n    dcf: await g(`/dcf/${t}`),\n    sentiment: await g(`/sentiment/${t}`),\n    speculator: await g(`/speculator/${t}`),\n  });\n}\n\nconst kiedy = new Date().toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' });\nconst prompt =\n  `PYTANIE UŻYTKOWNIKA: ${pytanie}\\n\\n` +\n  `Data/godzina wywołania: ${kiedy}.\\n` +\n  `Rozpoznane spółki: ${tickers.join(', ')}.\\n\\n` +\n  `KONTEKST MAKRO:\\n${JSON.stringify(macro, null, 1)}\\n\\n` +\n  `DANE SPÓŁEK:\\n${JSON.stringify(spolki, null, 1)}`;\n\nreturn [{ json: { prompt, pytanie, tickers } }];\n"
+        "jsCode": "const pytanie = $json.pytanie;\nconst tickers = $json.tickers;\nconst base = 'http://stock-api:8000';\nconst H = this.helpers;\nfunction sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }\n\n// Sequential — concurrency breaks yfinance (401 \"Invalid Crumb\"). One retry with backoff.\nasync function g(path) {\n  for (let attempt = 0; attempt < 2; attempt++) {\n    try { return await H.httpRequest({ url: base + path, json: true, timeout: 60000 }); }\n    catch (e) {\n      if (attempt === 0) { await sleep(1200); continue; }\n      return { error: String((e && e.message) || e) };\n    }\n  }\n}\n\nconst macro = await g('/macro');\nconst spolki = [];\nfor (const t of tickers) {\n  spolki.push({\n    ticker: t,\n    technical: await g(`/technical/${t}`),\n    fundamental: await g(`/fundamental/${t}`),\n    dcf: await g(`/dcf/${t}`),\n    sentiment: await g(`/sentiment/${t}`),\n    speculator: await g(`/speculator/${t}`),\n  });\n}\n\nconst kiedy = new Date().toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' });\nconst prompt =\n  `PYTANIE UŻYTKOWNIKA: ${pytanie}\\n\\n` +\n  `Data/godzina wywołania: ${kiedy}.\\n` +\n  `Rozpoznane spółki: ${tickers.join(', ')}.\\n\\n` +\n  `KONTEKST MAKRO:\\n${JSON.stringify(macro, null, 1)}\\n\\n` +\n  `DANE SPÓŁEK:\\n${JSON.stringify(spolki, null, 1)}`;\n\nreturn [{ json: { prompt, pytanie, tickers } }];\n"
       },
       "id": "zbierz",
-      "name": "Zbierz dane (sekwencyjnie)",
+      "name": "Fetch data (sequential)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -78,7 +78,7 @@
         "options": {}
       },
       "id": "odpowiedz",
-      "name": "Odpowiedź do czatu",
+      "name": "Chat response",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
@@ -92,25 +92,25 @@
       "main": [
         [
           {
-            "node": "Rozpoznaj pytanie",
+            "node": "Parse question",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Rozpoznaj pytanie": {
+    "Parse question": {
       "main": [
         [
           {
-            "node": "Zbierz dane (sekwencyjnie)",
+            "node": "Fetch data (sequential)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Zbierz dane (sekwencyjnie)": {
+    "Fetch data (sequential)": {
       "main": [
         [
           {
@@ -125,7 +125,7 @@
       "main": [
         [
           {
-            "node": "Odpowiedź do czatu",
+            "node": "Chat response",
             "type": "main",
             "index": 0
           }

@@ -110,5 +110,11 @@ inny wycinek analizy (techniczna, fundamentalna, wycena, sentyment itd.) i wysta
 
 - Po większych zmianach: ruff + mypy + pytest muszą być zielone (mypy ma ~51 znanych
   błędów na granicy bibliotek — nie dokładać nowych).
-- Komentarze i opisy po polsku (jak reszta projektu).
+- **Język: kod po angielsku, treść po polsku.** Po angielsku: komentarze, docstringi,
+  nazwy zmiennych/funkcji/testów, `Field(description=...)` i opisy endpointów (kontrakt
+  OpenAPI dla n8n), nazwy węzłów n8n. Po polsku zostaje wszystko, co widzi użytkownik lub
+  co trafia do raportu: noty wzorców (`PatternResult.note`), opisy katalizatorów, komunikaty
+  błędów w JSON, wydruki CLI (`printer.py`), teksty pomocy CLI, prompty systemowe dla LLM,
+  README i ten plik. Wyjątek: komentarz może cytować polski tekst, gdy opisuje realne dane
+  (nagłówek ze scrapingu, nazwa kolumny na Biznesradarze) — inaczej przestaje opisywać rzeczywistość.
 - Nie psuć kontraktu istniejących endpointów (n8n od nich zależy).

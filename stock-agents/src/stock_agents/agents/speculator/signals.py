@@ -10,12 +10,13 @@ _HORIZONS = [
 
 
 def _has_trigger(p: PatternResult, horizon_days: int) -> bool:
-    """Czy wzorzec zdarzeniowy ma swój katalizator w tym horyzoncie?
+    """Does this event-driven pattern have its catalyst within the horizon?
 
-    Wzorce typu post-div / pre-earnings drift opisują ruch wokół konkretnego
-    zdarzenia. Bez zdarzenia w horyzoncie są historyczną ciekawostką, a nie
-    prognozą — wcześniej napędzały projekcje spółek, które w ogóle nie płacą
-    dywidendy. Zostają w `patterns` (LLM je widzi), ale nie ważą w projekcji.
+    Patterns such as post-div or pre-earnings drift describe a move around a specific
+    event. Without that event in the horizon they are a historical curiosity, not a
+    forecast — previously they drove projections for companies that pay no dividend
+    at all. They stay in `patterns` (the LLM sees them) but carry no weight in the
+    projection.
     """
     if p.requires_event is None:
         return True
@@ -28,7 +29,7 @@ def _relevant_patterns(patterns: list[PatternResult], horizon_days: int) -> list
 
 
 def _weighted_direction(patterns: list[PatternResult]) -> tuple[float, float]:
-    """Zwraca (bull_score, bear_score) ważone siłą sygnału."""
+    """Returns (bull_score, bear_score) weighted by signal strength."""
     weights = {"strong": 3, "medium": 2, "weak": 1}
     bull, bear = 0.0, 0.0
     for p in patterns:
@@ -46,7 +47,7 @@ def _estimate_return_range(
     catalysts: list[Catalyst],
     horizon_days: int,
 ) -> tuple[float, float]:
-    """Szacuje zakres zwrotu (low, high) na podstawie wzorców."""
+    """Estimates the return range (low, high) from the patterns."""
     relevant = [p for p in patterns if p.direction == direction and p.avg_return is not None]
     if not relevant:
         base = 0.02 if direction == "UP" else -0.03
@@ -56,7 +57,7 @@ def _estimate_return_range(
     avg_abs = sum(returns) / len(returns)
     sign = 1 if direction == "UP" else -1
 
-    # Skaluj do horyzontu
+    # Scale to the horizon
     scale = min(horizon_days / 30, 1.5)
     low = sign * avg_abs * 0.5 * scale
     high = sign * avg_abs * 1.5 * scale

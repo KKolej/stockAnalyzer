@@ -14,7 +14,7 @@ router = APIRouter(prefix="/compare", tags=["compare"])
 
 @router.get("", response_model=CompareResponse)
 def compare(
-    tickers: str = Query(description="Tickery oddzielone przecinkiem, np. CDR,PKO,KGHM"),
+    tickers: str = Query(description="Comma-separated tickers, e.g. CDR,PKO,KGHM"),
 ) -> CompareResponse | JSONResponse:
     ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
     if len(ticker_list) < 2:

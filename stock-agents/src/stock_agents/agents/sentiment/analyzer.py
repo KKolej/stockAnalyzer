@@ -10,13 +10,13 @@ BULLISH_KEYWORDS = [
     "buy", "bullish", "strong", "beat", "exceeded", "upgraded", "outperform",
     "rally", "surge", "jump", "gain", "profit", "revenue", "positive", "growth",
     "strong buy", "accumulate", "overweight", "upside", "breakout", "record high",
-    # Polskie — wyniki
+    # Polish — earnings
     "wzrost", "rośnie", "zysk", "rekord", "byczo", "kupno", "poprawa", "wzrósł",
     "zwyżkuje", "przewyższa", "pobił", "pobila", "osiągnął", "sukces", "świetny",
     "rewelacyjny", "dobry", "powyżej oczekiwań", "powyżej prognoz", "pobił prognozy",
-    # Polskie — dywidenda / skup
+    # Polish — dividend / buyback
     "dywidenda", "skup akcji", "wykup", "wypłata dywidendy", "rekomendacja kupuj",
-    # Polskie — strategia / wzrost
+    # Polish — strategy / growth
     "ekspansja", "akwizycja", "przejęcie", "nowy kontrakt", "nowe zamówienie",
     "odbicie", "zyskuje", "zyskują", "drożeje", "wystrzelił", "wystrzeliły",
     "nowych maksimach", "rajd",
@@ -29,17 +29,17 @@ BEARISH_KEYWORDS = [
     "sell", "bearish", "weak", "miss", "missed", "downgraded", "underperform",
     "decline", "drop", "fall", "loss", "negative", "warning", "risk", "concern",
     "trouble", "downside", "below expectations", "cut", "reduce", "underweight",
-    # Polskie — wyniki
+    # Polish — earnings
     "spadek", "spada", "strata", "niedźwiedzio", "rozczarowanie", "pogorszenie",
     "spadł", "zniżkuje", "poniżej", "obniżył", "obniżka", "problem", "słaby",
     "zły", "poniżej oczekiwań", "poniżej prognoz", "chybił prognozy",
-    # Polskie — zagrożenia
+    # Polish — risks
     "restrukturyzacja", "zwolnienia", "odpis", "odpisał", "korekta", "korekta wartości",
     "utrata kontraktu", "postępowanie sądowe", "kara", "nałożona kara", "grzywna",
     "zmniejszył udział", "obniżył prognozę", "obniżył rekomendację", "redukcja",
     "bankructwo", "upadłość", "likwidacja", "zawieszenie dywidendy", "brak dywidendy",
     "rekomendacja sprzedaj", "rozczarowujący",
-    # Polskie — język ruchów cen (częste w nagłówkach)
+    # Polish — price movement wording (common in headlines)
     "zanurkował", "zanurkowały", "nurkuje", "nurkują", "pod wodą", "tąpnięcie",
     "tąpnął", "runął", "runęły", "runie", "runą", "załamanie", "załamał", "katastrofa",
     "przecena", "wyprzedaż", "wyprzedają", "panika", "tracą", "traci",
