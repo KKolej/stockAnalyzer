@@ -136,5 +136,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "pinData": {}
+  "pinData": {},
+  "id": "StockAgentsClaudeCode",
+  "active": false
 }
