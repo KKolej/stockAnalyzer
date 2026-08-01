@@ -1,156 +1,45 @@
 {
-  "id": "StockAgentsClaudeCode",
-  "name": "Stock Analysis (Claude Code)",
+  "name": "Stock Analysis — pytanie w czacie (Claude Code)",
   "nodes": [
     {
       "parameters": {
-        "options": {}
+        "options": {
+          "responseMode": "lastNode"
+        }
       },
       "id": "chat-trigger",
       "name": "When chat message received",
       "type": "@n8n/n8n-nodes-langchain.chatTrigger",
       "typeVersion": 1.1,
       "position": [
-        -320,
+        -160,
         300
       ],
-      "webhookId": "stock-analysis-chat-cc"
+      "webhookId": "stock-chat-free-query"
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "tk",
-              "name": "ticker",
-              "type": "string",
-              "value": "={{ ($json.chatInput || $json.ticker || '').toString().trim().toUpperCase() }}"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "// Wolne pytanie z czatu → lista tickerów + oryginalna treść pytania.\n// Wcześniej całe `chatInput` szło jako ticker, więc każde zdanie rozwalało endpointy.\nconst raw = String($json.chatInput || $json.ticker || '').trim();\nif (!raw) { throw new Error('Puste pytanie.'); }\n\nconst ZNANE = ['PKO','PEO','PKN','PZU','KGHM','KGH','DNP','ALE','CDR','LPP','SPL','PGE',\n  'CPS','OPL','KTY','MBK','BDX','PCO','KRU','ALR','ZAB','JSW','CCC','EUR','GTC','TPE','ENG'];\n\n// „ALE\" to ticker Allegro, ale też polski spójnik („kupić PKO, ale nie teraz”).\n// Dlatego najpierw szukamy tickerów pisanych WIELKIMI literami w oryginale.\nconst DWUZNACZNE = ['ALE', 'EUR'];\nconst WZOR = /\\b[A-Z][A-Z0-9]{1,5}(?:\\.US)?\\b/g;\n\nconst zOryginalu = raw.match(WZOR) || [];\nlet tickers = [...new Set(zOryginalu.filter((t) => ZNANE.includes(t) || t.endsWith('.US')))];\n\n// Dopiero gdy nic nie ma — próba bez rozróżniania wielkości liter („co z mbk?”),\n// z pominięciem tokenów dwuznacznych.\nif (tickers.length === 0) {\n  const zWielkich = raw.toUpperCase().match(WZOR) || [];\n  tickers = [...new Set(zWielkich.filter(\n    (t) => (ZNANE.includes(t) && !DWUZNACZNE.includes(t)) || t.endsWith('.US'),\n  ))];\n}\n\n// Fallback: samotny token bez spacji traktujemy jak ticker (stare zachowanie).\nif (tickers.length === 0 && /^[A-Z0-9.]{2,8}$/.test(raw.toUpperCase())) {\n  tickers = [raw.toUpperCase()];\n}\nif (tickers.length === 0) {\n  throw new Error('Nie rozpoznałem tickera w pytaniu. Podaj np. CDR, PKO albo TSLA.US.');\n}\n\nreturn [{ json: { pytanie: raw, tickers: tickers.slice(0, 3) } }];\n"
       },
-      "id": "ticker",
-      "name": "Ticker",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "id": "rozpoznaj",
+      "name": "Rozpoznaj pytanie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        -120,
+        60,
         300
       ]
     },
     {
       "parameters": {
-        "url": "=http://stock-api:8000/technical/{{ $('Ticker').item.json.ticker }}",
-        "options": {
-          "timeout": 60000
-        }
+        "jsCode": "const pytanie = $json.pytanie;\nconst tickers = $json.tickers;\nconst base = 'http://stock-api:8000';\nconst H = this.helpers;\nfunction sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }\n\n// Sekwencyjnie — równoległość wywala yfinance (401 \"Invalid Crumb\"). 1 retry z backoffem.\nasync function g(path) {\n  for (let attempt = 0; attempt < 2; attempt++) {\n    try { return await H.httpRequest({ url: base + path, json: true, timeout: 60000 }); }\n    catch (e) {\n      if (attempt === 0) { await sleep(1200); continue; }\n      return { error: String((e && e.message) || e) };\n    }\n  }\n}\n\nconst macro = await g('/macro');\nconst spolki = [];\nfor (const t of tickers) {\n  spolki.push({\n    ticker: t,\n    technical: await g(`/technical/${t}`),\n    fundamental: await g(`/fundamental/${t}`),\n    dcf: await g(`/dcf/${t}`),\n    sentiment: await g(`/sentiment/${t}`),\n    speculator: await g(`/speculator/${t}`),\n  });\n}\n\nconst kiedy = new Date().toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' });\nconst prompt =\n  `PYTANIE UŻYTKOWNIKA: ${pytanie}\\n\\n` +\n  `Data/godzina wywołania: ${kiedy}.\\n` +\n  `Rozpoznane spółki: ${tickers.join(', ')}.\\n\\n` +\n  `KONTEKST MAKRO:\\n${JSON.stringify(macro, null, 1)}\\n\\n` +\n  `DANE SPÓŁEK:\\n${JSON.stringify(spolki, null, 1)}`;\n\nreturn [{ json: { prompt, pytanie, tickers } }];\n"
       },
-      "id": "t-technical",
-      "name": "Technical",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        80,
-        300
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "url": "=http://stock-api:8000/fundamental/{{ $('Ticker').item.json.ticker }}",
-        "options": {
-          "timeout": 60000
-        }
-      },
-      "id": "t-fundamental",
-      "name": "Fundamental",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        280,
-        300
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "url": "=http://stock-api:8000/dcf/{{ $('Ticker').item.json.ticker }}",
-        "options": {
-          "timeout": 60000
-        }
-      },
-      "id": "t-dcf",
-      "name": "DCF",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        480,
-        300
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "url": "=http://stock-api:8000/speculator/{{ $('Ticker').item.json.ticker }}",
-        "options": {
-          "timeout": 60000
-        }
-      },
-      "id": "t-speculator",
-      "name": "Speculator",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        680,
-        300
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "url": "=http://stock-api:8000/sentiment/{{ $('Ticker').item.json.ticker }}",
-        "options": {
-          "timeout": 60000
-        }
-      },
-      "id": "t-sentiment",
-      "name": "Sentiment",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        880,
-        300
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "url": "=http://stock-api:8000/macro",
-        "options": {
-          "timeout": 60000
-        }
-      },
-      "id": "t-macro",
-      "name": "Macro",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1080,
-        300
-      ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "const ticker = $('Ticker').item.json.ticker;\nfunction pick(name) { try { return $(name).item.json; } catch (e) { return { error: 'brak danych (' + name + ')' }; } }\nconst dane = {\n  ticker,\n  technical: pick('Technical'),\n  fundamental: pick('Fundamental'),\n  dcf: pick('DCF'),\n  speculator: pick('Speculator'),\n  sentiment: pick('Sentiment'),\n  macro: pick('Macro'),\n};\nconst prompt =\n  `Przeanalizuj spółkę o tickerze ${ticker}. Poniżej surowe dane ze wszystkich agentów (JSON). ` +\n  `Jeśli jakiś blok ma pole \"error\" — odnotuj to i nie zmyślaj.\\n\\nDANE:\\n` +\n  JSON.stringify(dane, null, 2);\nreturn [{ json: { ticker, prompt } }];\n"
-      },
-      "id": "build-prompt",
-      "name": "Buduj prompt",
+      "id": "zbierz",
+      "name": "Zbierz dane (sekwencyjnie)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1280,
+        280,
         300
       ]
     },
@@ -160,43 +49,42 @@
         "url": "http://host.docker.internal:8787",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { \"prompt\": $json.prompt, \"system\": \"Jesteś analitykiem giełdowym (GPW + rynki zagraniczne). Dostajesz ticker oraz SUROWE, ustrukturyzowane dane ze wszystkich agentów (Technical, Fundamental, DCF, Speculator, Sentiment, Macro) — to dostawca danych, nie analityk. Twoim zadaniem jest SYNTEZA. Jeśli jakiś blok danych zawiera pole \\\"error\\\" albo brak danych — odnotuj to wprost i nie zmyślaj liczb.\\n\\nSPÓŁKI GAMINGOWE — analiza zdarzeniowa: jeśli Speculator zwróci w katalizatorach targi gier (Gamescom, Tokyo Game Show, The Game Awards, PGA itd.), ZAWSZE zestaw je z nagłówkami z Sentimentu: czy rynek oczekuje konkretnych zapowiedzi (nowa gra, DLC, trailer, data premiery)? Run-up przed targami napędzają oczekiwania — sama data to za mało. Jeśli backtest wzorca \\\"Run-up przed targami\\\" NIE potwierdza go u tej spółki, zaznacz to jako kontrargument. Odróżniaj oficjalne zapowiedzi od plotek. Uwzględnij ryzyko \\\"sell the news\\\".\\n\\nZwróć zwięzłą analizę PO POLSKU w sekcjach:\\n1. Werdykt (jedno zdanie: bullish / neutralny / bearish + krótkie uzasadnienie)\\n2. Technika (trend, kluczowe wskaźniki, wsparcia/opory, ryzyko: Sharpe/DD/beta)\\n3. Fundamenty (wycena: P/E, P/B; jakość: ROE/ROIC, Piotroski, Altman Z; FCF)\\n4. Wycena DCF (fair value Base/Bull/Bear vs cena, upside)\\n5. Spekulacja / katalizatory (wzorce, nadchodzące zdarzenia)\\n6. Sentyment (ogólny wydźwięk + źródła)\\n7. Kontekst makro (waluty, inflacja, WIG20, sektory)\\n8. Główne ryzyka\\n\\nNie podawaj porad inwestycyjnych jako pewników — to analiza danych, nie rekomendacja.\", \"model\": \"claude-sonnet-5\" } }}",
+        "jsonBody": "={{ {\"prompt\": $json.prompt, \"system\": \"Jesteś analitykiem giełdowym (GPW + rynki zagraniczne). Użytkownik zadaje PYTANIE,\\na Ty dostajesz do niego KOMPLET surowych danych z agentów (technical, fundamental, dcf,\\nsentiment, speculator) + makro. To dane od dostawcy, nie od analityka.\\n\\nODPOWIADAJ NA ZADANE PYTANIE. Nie recytuj wszystkich sekcji, jeśli pytanie jest wąskie —\\nale gdy pytanie jest ogólne („co z CDR?”), daj pełny obraz: werdykt, technika, fundamenty,\\nDCF, katalizatory, sentyment, makro, ryzyka.\\n\\n═══ ŻELAZNE ZASADY (łamanie ich = odpowiedź do kosza) ═══\\n\\n1. ZERO LICZB SPOZA DANYCH. Każda liczba musi pochodzić z JSON-a wejściowego. Nie licz\\n   z pamięci, nie uzupełniaj własną wiedzą o rynku, nie podawaj kursów „z głowy”.\\n\\n2. SUPERLATYWY TYLKO PO PRZELICZENIU. „Najwyższy”, „najmocniejszy”, „jedyny” wolno użyć\\n   dopiero po sprawdzeniu wszystkich pozycji w danych.\\n\\n3. ŚWIEŻOŚĆ. Podaj `technical.data_quality.last_date`; gdy `is_stale=true` lub\\n   `missing_sessions>=1`, napisz WYRAŹNIE, że analiza stoi na danych sprzed N sesji.\\n   Poza godzinami sesji pisz „na zamknięciu DD.MM”, nigdy „rośnie” w czasie teraźniejszym.\\n\\n4. OKNO METRYK RYZYKA. `risk.period_days` to zwykle ~89 dni — Sharpe/Sortino/CAGR/drawdown\\n   są z TEGO okna i annualizowane. Nigdy nie nazywaj tego „rokiem”.\\n\\n5. CENY DOCELOWE — ZAWSZE, W OBIE STRONY. Gdy jest wzorzec „Rekomendacje analityków”,\\n   podaj cel i porównaj z ceną także wtedy, gdy cel jest PONIŻEJ kursu. Podaj datę\\n   najnowszej rekomendacji z `note` — rekomendacja sprzed pół roku to nie konsensus.\\n\\n6. WZORCE BEZ TRIGGERA. Wzorzec z `requires_event` i `event_days_away: null` nie ma\\n   nadchodzącego zdarzenia — nie używaj go jako argumentu za ruchem.\\n\\n7. PROJEKCJE TO NIE PROGNOZY. `projections` mają `is_backtested: false` — `probability`\\n   to zgodność ważonych sygnałów, nie zweryfikowane prawdopodobieństwo. Pisz „model\\n   szacuje”, „historycznie”; nigdy „przewiduje” ani „wzrośnie o X%”.\\n\\n8. WIELKOŚĆ PRÓBY. Przy wzorcach sezonowych/dywidendowych podawaj `sample_size`\\n   („8/10 przypadków, próba 10 zdarzeń”). Samo „80% trafności” jest zakazane.\\n\\n9. SENTYMENT — TYLKO Z NAGŁÓWKÓW w `sentiment.results[].mentions`. Wypisz, które źródła\\n   padły (`error`). Gdy `total_mentions < 10` albo działa jedno źródło — oznacz sentyment\\n   jako niskiej wiarygodności. Nigdy nie dopisuj wydarzeń, których nie ma w tytułach.\\n\\n10. MAKRO. `wig20_pos_52w` i `sectors[].pos_52w` używaj tylko gdy `pos_52w_source` jest\\n    ustawione. Inflację opisuj z `cpi_change_pp`: dodatnie = przyspiesza, ujemne = zwalnia,\\n    „stabilna” tylko przy zmianie ok. 0.0 p.p.\\n\\n11. INSIDERZY. Nota podaje nazwisko i funkcję — rozróżniaj sprzedaż członka zarządu od\\n    pakietu funduszu. Formułuj jako zależność historyczną, nie pewny sygnał.\\n\\n12. DCF z `available:false` — napisz, że wycena jest nieadekwatna (np. ujemny FCF)\\n    i NIE podawaj fair value. Blok z polem `error` — odnotuj i pomiń.\\n\\n13. ROZDZIEL REJESTRY. Fakty (liczby z danych), Model (wzorce i projekcje z zastrzeżeniem\\n    o braku backtestu) i Interpretację (Twoja opinia) oznaczaj jawnie — nie mieszaj ich\\n    w jednym zdaniu. Podaj też argumenty przeciw własnej tezie.\\n\\nSPÓŁKI GAMINGOWE: gdy w katalizatorach są targi (Gamescom, TGS, PGA), zestaw je z nagłówkami\\nz sentymentu — czy rynek oczekuje KONKRETNYCH zapowiedzi. Jeśli wzorzec „Run-up przed targami”\\ntego nie potwierdza, podaj to jako kontrargument. Uwzględnij ryzyko „sell the news”.\\n\\nTo analiza danych, NIE rekomendacja inwestycyjna. Odpowiadaj po polsku i zwięźle.\", \"model\": \"opus\"} }}",
         "options": {
-          "timeout": 300000
+          "timeout": 900000
         }
       },
-      "id": "claude-proxy",
+      "id": "claude",
       "name": "Claude Code (proxy)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1480,
+        500,
         300
       ]
     },
     {
       "parameters": {
-        "fromEmail": "b.kolej.helper@gmail.com",
-        "toEmail": "b.kolej@gmail.com",
-        "subject": "=Analiza: {{ $('Ticker').item.json.ticker }}",
-        "emailFormat": "text",
-        "text": "={{ $json.response }}",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "out",
+              "name": "output",
+              "type": "string",
+              "value": "={{ $json.response || $json.error || 'Brak odpowiedzi z proxy.' }}"
+            }
+          ]
+        },
         "options": {}
       },
-      "id": "send-email",
-      "name": "Send Email",
-      "type": "n8n-nodes-base.emailSend",
-      "typeVersion": 2.1,
+      "id": "odpowiedz",
+      "name": "Odpowiedź do czatu",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [
-        1680,
+        720,
         300
-      ],
-      "credentials": {
-        "smtp": {
-          "id": "oCod4PkHItqwcI4T",
-          "name": "SMTP account"
-        }
-      }
+      ]
     }
   ],
   "connections": {
@@ -204,91 +92,25 @@
       "main": [
         [
           {
-            "node": "Ticker",
+            "node": "Rozpoznaj pytanie",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Ticker": {
+    "Rozpoznaj pytanie": {
       "main": [
         [
           {
-            "node": "Technical",
+            "node": "Zbierz dane (sekwencyjnie)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Technical": {
-      "main": [
-        [
-          {
-            "node": "Fundamental",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fundamental": {
-      "main": [
-        [
-          {
-            "node": "DCF",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "DCF": {
-      "main": [
-        [
-          {
-            "node": "Speculator",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Speculator": {
-      "main": [
-        [
-          {
-            "node": "Sentiment",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Sentiment": {
-      "main": [
-        [
-          {
-            "node": "Macro",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Macro": {
-      "main": [
-        [
-          {
-            "node": "Buduj prompt",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Buduj prompt": {
+    "Zbierz dane (sekwencyjnie)": {
       "main": [
         [
           {
@@ -303,7 +125,7 @@
       "main": [
         [
           {
-            "node": "Send Email",
+            "node": "Odpowiedź do czatu",
             "type": "main",
             "index": 0
           }
@@ -314,9 +136,5 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "active": false,
-  "pinData": {},
-  "meta": {
-    "templateId": "stock-agents-claude-code"
-  }
+  "pinData": {}
 }
