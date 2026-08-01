@@ -498,6 +498,8 @@ def analyze_insider_transactions(ticker: str) -> PatternResult | None:
 
         buys, sells, other = 0, 0, 0
         total_buy_value, total_sell_value = 0.0, 0.0
+        buyers: list[str] = []
+        sellers: list[str] = []
         found = 0
 
         for page in range(1, 6):
@@ -544,12 +546,18 @@ def analyze_insider_transactions(ticker: str) -> PatternResult | None:
                 except ValueError:
                     val = 0.0
 
-                if "kupno" in tx_type or "nabycie" in tx_type:
+                # Kto zawarł transakcję (imię + funkcja) — bez tego nie da się
+                # odróżnić sprzedaży członka zarządu od pakietu funduszu (ABB).
+                who = re.sub(r"\s+", " ", cells[1]).strip()
+
+                if any(k in tx_type for k in ("kupno", "nabycie", "przejęcie", "objęcie")):
                     buys += 1
                     total_buy_value += val
+                    buyers.append(who)
                 elif "sprzedaż" in tx_type or "zbycie" in tx_type:
                     sells += 1
                     total_sell_value += val
+                    sellers.append(who)
                 else:
                     other += 1
 
@@ -569,11 +577,16 @@ def analyze_insider_transactions(ticker: str) -> PatternResult | None:
         buy_str = f"{total_buy_value/1e6:.1f}M PLN" if total_buy_value >= 1e6 else f"{total_buy_value/1e3:.0f}k PLN"
         sell_str = f"{total_sell_value/1e6:.1f}M PLN" if total_sell_value >= 1e6 else f"{total_sell_value/1e3:.0f}k PLN"
 
+        def _who(names_list: list[str], limit: int = 3) -> str:
+            uniq = list(dict.fromkeys(names_list))
+            head = "; ".join(n[:45] for n in uniq[:limit])
+            return f" [{head}{'; …' if len(uniq) > limit else ''}]" if head else ""
+
         parts = []
         if buys:
-            parts.append(f"Kupno: {buys}×({buy_str})")
+            parts.append(f"Kupno: {buys}×({buy_str}){_who(buyers)}")
         if sells:
-            parts.append(f"Sprzedaż: {sells}×({sell_str})")
+            parts.append(f"Sprzedaż: {sells}×({sell_str}){_who(sellers)}")
 
         return PatternResult(
             name="Transakcje insiderów",
