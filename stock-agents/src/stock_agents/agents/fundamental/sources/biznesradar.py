@@ -204,6 +204,7 @@ FIELD_MAP: dict[str, str] = {
     "Zysk na akcję": "eps",
     "Wartość księgowa na akcję": "book_value",
     "Cena / Przychody ze sprzedaży": "ps_ratio",
+    "Przychody ze sprzedaży na akcję": "revenue_per_share",
     "ROE": "roe_pct",
     "ROA": "roa_pct",
     "Marża zysku netto": "profit_margin_pct",

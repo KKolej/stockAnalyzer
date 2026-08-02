@@ -97,6 +97,9 @@ class DataQuality(_Base):
     expected_last_session: str | None = None
     missing_sessions: int | None = None
     is_stale: bool | None = None
+    last_close_source: str | None = Field(
+        default=None,
+        description="history = close from the candle; fast_info = candle had no close, filled from the live quote")
 
 
 class TechnicalResponse(_Base):
@@ -139,8 +142,16 @@ class FundamentalData(_Base):
     fcf_ttm: float | None = None
     fcf_yield: float | None = None
     dividend_yield: float | None = None
-    piotroski_score: int | None = None
+    piotroski_score: int | None = Field(
+        default=None, description="Piotroski criteria met, out of `piotroski_max` checked")
+    piotroski_max: int | None = Field(
+        default=None, description="Criteria actually evaluated; below `piotroski_scale` when data is missing")
+    piotroski_scale: int | None = Field(
+        default=None, description="Canonical F-Score scale (9) — context for score/max")
     altman_z: float | None = None
+    quality: dict[str, object] | None = Field(
+        default=None,
+        description="Source cross-check: price used, Biznesradar's own quote, ratios recomputed on our price")
     error: str | None = None
 
 

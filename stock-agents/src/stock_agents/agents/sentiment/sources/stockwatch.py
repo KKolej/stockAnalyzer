@@ -3,7 +3,7 @@ from __future__ import annotations
 import urllib.request
 from datetime import datetime
 
-from ....ticker_map import STOCKWATCH_SLUGS, is_gpw
+from ....ticker_map import STOCKWATCH_SLUGS, canonical_ticker, is_gpw
 from ..models import Mention, SentimentLabel, SourceResult
 
 _BASE = "https://www.stockwatch.pl"
@@ -37,7 +37,8 @@ def fetch(ticker: str, company: str) -> SourceResult:
     # Company tag page instead of full-text search: `?s=ALE` returned
     # everything with the Polish conjunction "ale" in the slug ("Fed bez podwyżki, ALE rynek…"),
     # because the filter looked for the ticker anywhere in the URL.
-    slug = STOCKWATCH_SLUGS.get(ticker.upper(), ticker.lower())
+    symbol = canonical_ticker(ticker)
+    slug = STOCKWATCH_SLUGS.get(symbol, symbol.lower())
     url = f"{_BASE}/wiadomosci/walor/{slug}"
     try:
         req = urllib.request.Request(url, headers=_HEADERS)

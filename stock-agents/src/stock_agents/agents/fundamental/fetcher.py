@@ -32,6 +32,10 @@ _BR_PCT: dict[str, str] = {
 }
 
 
+# Piotroski's F-Score is defined on 9 criteria; we evaluate the subset yfinance covers.
+_PIOTROSKI_SCALE = 9
+
+
 def _normalize_yield(val: float | None) -> float | None:
     if val is None:
         return None
@@ -184,7 +188,30 @@ def _overlay_biznesradar(d: FundamentalData, ticker: str) -> FundamentalData:
         if (v := mapped.get(src)) is not None:
             overrides[dst] = v / 100
 
-    return dc.replace(d, **overrides) if overrides else d
+    # Biznesradar computes C/Z and C/WK against ITS OWN "Kurs", which can lag the market
+    # badly (2026-08-02: PEO 228.80 vs 245.50, ALE 26.36 vs 44.99 — Allegro's snapshot was
+    # over a year old). Copied verbatim, those ratios landed next to a fresh price and
+    # contradicted it: P/E 9.27 printed beside an EPS that implies 9.95. The per-share
+    # values come from the reports and are worth taking as they are; every ratio that
+    # divides by a price we recompute on OUR price — which is what the market quotes.
+    per_share = {
+        "pe_trailing": overrides.get("eps", d.eps),
+        "pb": overrides.get("book_value", d.book_value),
+        "ps_ratio": mapped.get("revenue_per_share"),
+    }
+    recomputed: list[str] = []
+    if d.price and d.price > 0:
+        for ratio, value in per_share.items():
+            if value and value > 0:
+                overrides[ratio] = round(d.price / value, 2)
+                recomputed.append(ratio)
+
+    overrides["quality"] = {
+        "price": d.price,
+        "biznesradar_price": raw.get("Kurs"),
+        "ratios_recomputed_on_price": recomputed,
+    }
+    return dc.replace(d, **overrides)
 
 
 def _calc_scores(data: FundamentalData, yahoo_ticker: str) -> FundamentalData:
@@ -302,6 +329,7 @@ def _calc_scores(data: FundamentalData, yahoo_ticker: str) -> FundamentalData:
     if max_score >= 4:
         data.piotroski_score = score
         data.piotroski_max = max_score
+        data.piotroski_scale = _PIOTROSKI_SCALE
 
     # ── Altman Z'' Score (non-financial, non-manufacturing) ──────────────────
     # Z'' = 6.56*X1 + 3.26*X2 + 6.72*X3 + 1.05*X4

@@ -13,7 +13,7 @@ GPW_COMPANIES: dict[str, str] = {
     "OPL": "Orange Polska",
     "CPS": "Cyfrowy Polsat",
     "ALR": "Alior Bank",
-    "SPL": "Santander Bank Polska",
+    "EBP": "Erste Bank Polska",
     "KRU": "Kruk",
     "PCO": "Pepco",
     "ZAB": "Żabka",
@@ -31,11 +31,19 @@ GPW_SUFFIX = ".WA"
 # GPW tickers whose Yahoo Finance symbol differs from the Polish abbreviation
 GPW_TICKER_OVERRIDES: dict[str, str] = {"KGHM": "KGH"}
 
+# Tickers renamed on the exchange. The old symbol keeps working as input, everything
+# downstream resolves to the current one. A dead ticker is silent and expensive:
+# SPL.WA became a 404 in yfinance on 2026-04-28 (Santander Bank Polska -> Erste Bank
+# Polska, GPW abbreviation EBP), so the company simply vanished from every report
+# with nothing but a generic "Brak danych" to show for it.
+RENAMED_TICKERS: dict[str, str] = {"SPL": "EBP"}
+
 # Slug in the Bankier URL != GPW abbreviation. CAUTION: /akcje/OPL is **Optopol
 # Technology** (delisted from GPW), NOT Orange Polska — without this map the OPL
 # sentiment pulled 2009 news about a completely different company.
 BANKIER_SLUGS: dict[str, str] = {
     "OPL": "ORANGEPL",
+    "EBP": "ERSTEPL",
 }
 
 # Slug of the "walor" tag on Stockwatch. The bare ticker works by default
@@ -48,8 +56,16 @@ _GENERIC_NAME_TOKENS = {"bank", "banku", "polska", "polski", "grupa", "group",
                         "holding", "spolka", "spółka", "sa", "s.a."}
 
 
-def ticker_to_company(ticker: str) -> str:
+def canonical_ticker(ticker: str) -> str:
+    """Resolves a renamed ticker to the one the exchange uses today."""
     upper = ticker.upper()
+    if upper.endswith(US_SUFFIX):
+        return upper
+    return RENAMED_TICKERS.get(upper, upper)
+
+
+def ticker_to_company(ticker: str) -> str:
+    upper = canonical_ticker(ticker)
     if upper.endswith(US_SUFFIX):
         return upper.removesuffix(US_SUFFIX)
     return GPW_COMPANIES.get(upper, upper)
@@ -72,7 +88,7 @@ def is_gpw(ticker: str) -> bool:
 
 def to_yahoo_ticker(ticker: str) -> str:
     """Converts an input ticker (e.g. PKO, CDR, TSLA.US) into a Yahoo Finance symbol."""
-    upper = ticker.upper()
+    upper = canonical_ticker(ticker)
     if upper.endswith(US_SUFFIX):
         return upper.removesuffix(US_SUFFIX)
     base = GPW_TICKER_OVERRIDES.get(upper, upper)

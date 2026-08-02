@@ -4,7 +4,7 @@ import re
 import urllib.request
 from datetime import datetime
 
-from ....ticker_map import BANKIER_SLUGS, company_identity_tokens, is_gpw
+from ....ticker_map import BANKIER_SLUGS, canonical_ticker, company_identity_tokens, is_gpw
 from ..models import Mention, SentimentLabel, SourceResult
 
 _BASE = "https://www.bankier.pl"
@@ -51,7 +51,8 @@ def fetch(ticker: str, company: str) -> SourceResult:
     except ImportError:
         return SourceResult(name="Bankier", error="beautifulsoup4 not installed")
 
-    slug = BANKIER_SLUGS.get(ticker.upper(), ticker.upper())
+    symbol = canonical_ticker(ticker)
+    slug = BANKIER_SLUGS.get(symbol, symbol)
     url = f"{_BASE}/gielda/notowania/akcje/{slug}/wiadomosci"
     try:
         req = urllib.request.Request(url, headers=_HEADERS)

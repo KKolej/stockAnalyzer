@@ -74,6 +74,10 @@ class FundamentalData:
     # History (last 5 years, newest first)
     history: list[YearlyRecord] = field(default_factory=list)
 
+    # Where the valuation ratios come from — lets the consumer see that P/E and P/B
+    # were recomputed on our price instead of Biznesradar's own (often stale) quote.
+    quality: dict[str, object] = field(default_factory=dict)
+
     # Sector (from yfinance)
     sector: str = ""
 
@@ -86,8 +90,11 @@ class FundamentalData:
     price_to_cf: float | None = None           # price / CFO per share
 
     # Scoring (computed from financial data)
-    piotroski_score: int | None = None          # 0-9 (or less when data is missing)
-    piotroski_max: int | None = None            # highest attainable score (missing criteria lower it)
+    piotroski_score: int | None = None          # criteria met, out of `piotroski_max`
+    piotroski_max: int | None = None            # criteria actually checked (missing data lowers it)
+    # Canonical F-Score scale. Published without it, "6/7" reads like a broken 0-9 score;
+    # what it means is 6 of the 7 criteria we could evaluate, 2 having no data.
+    piotroski_scale: int | None = None
     graham_number: float | None = None          # sqrt(22.5 × EPS × BVPS)
     altman_z: float | None = None               # Z'' score
     peg_ratio: float | None = None              # P/E / CAGR zysku

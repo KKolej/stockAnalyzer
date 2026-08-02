@@ -45,8 +45,55 @@ Działa w trybie **map-reduce**, nie jednym wielkim promptem:
 2. `Loop over tickers` (batch 1) → `Claude Code (per ticker)` — analiza JEDNEJ spółki
    (~9k tokenów). Zwraca `###KOSZYK### / ###LINIA### / ###SZCZEGOLY###`.
 3. `Build ranking prompt` → `Claude Code (ranking)` — dostaje tylko 20 jednozdaniowych
-   ocen + makro (~15k tokenów) i układa Część 1.
-4. `Assemble e-mail` — skleja Część 1 z blokami szczegółów spółek 🟢/🔴.
+   ocen + makro (~15k tokenów) i zwraca `###NAGLOWEK### / ###KOLEJNOSC### / ###MAKRO###`.
+4. `Assemble e-mail` — renderuje maila (HTML + wersja tekstowa).
+
+**Etap rankingu NIE przepisuje linii spółek** — w `###KOLEJNOSC###` podaje same tickery
+(`🟢: PKO, CDR`), a treść wkleja `Assemble e-mail` dokładnie tak, jak napisał ją etap
+per-spółkę. Wcześniej model przepisywał 20 linii i po drodze gubił cyfry.
+
+### Wygląd maila (`Assemble e-mail`)
+
+Mail wychodzi jako **HTML + `text/plain`** (`emailFormat: both`), temat zawiera bilans
+koszyków: `WIG20 — przegląd 02.08.2026 · 3🟢 2🔴 15🟡 · ⚠️ dane nieświeże`.
+
+Układ: ciemny nagłówek → trzy kafle z licznikami koszyków → baner ostrzeżeń → nagłówek
+dnia → Część 1 (koszyki, ticker w plakietce + jednozdaniowy sygnał + **pasek horyzontów**)
+→ tło makro → Część 2 (karta na spółkę 🟢/🔴: **tabela horyzontów** + bloki
+**Fakty / Model / Interpretacja**) → stopka z zastrzeżeniem.
+
+### Oceny w horyzontach
+
+Każda spółka — także z koszyka 🟡 — dostaje sześć ocen: **7D, 2T, 1M, 3M, 1R, LT**
+(▲ kupuj / ● trzymaj / ▼ sprzedaj / · brak danych). W Części 1 to pasek do skanowania,
+w Części 2 tabela z jednozdaniowym uzasadnieniem.
+
+Prompt per-spółkę **przypisuje horyzontom rozłączne źródła danych** (zasada 14) — bo bez
+tego model uzasadniał ocenę roczną RSI-em:
+
+| Horyzont | Wolno użyć |
+|---|---|
+| 7D, 2T | technika, wzorce **z triggerem**, kalendarz katalizatorów |
+| 1M, 3M | sezonowość (z `sample_size`), katalizatory w oknie, momentum, cel analityków z datą |
+| 1R | wyłącznie fundamenty i wycena — **zakaz** RSI/MACD/Bollingera/52W |
+| LT | jakość biznesu: ROIC, trwałość marż, dźwignia, Piotroski, CAGR |
+
+Brak danych na horyzont → `BRAK DANYCH` + powód; zakaz wypełniania „na wyczucie".
+Format odpowiedzi to `KOD | OCENA | uzasadnienie`; parser w `Collect review` toleruje
+pogrubienia i brakujące wiersze (brakujący horyzont = „brak danych", nigdy dziura w tabeli).
+
+Rzeczy, które **liczy kod, nie model** (arytmetyka na `quality` — nie ma powodu, żeby
+prompt mógł się w niej pomylić): liczniki koszyków, data ostatniej sesji, lista spółek
+z nieświeżymi danymi, lista spółek bez analizy, temat maila.
+
+Wymagania techniczne, o które łatwo się potknąć przy zmianach:
+
+- **Style tylko inline** — Gmail/Outlook wycinają `<style>`; layout na `<table>`, bez flex/grid.
+- Szczegóły są rozbijane po nagłówkach `**Fakty**` / `**Model**` / `**Interpretacja**`
+  (dlatego prompt per-spółkę wymaga dokładnie takiego zapisu). Inny zapis nie gubi treści —
+  ląduje jako jeden blok bez etykiety.
+- Renderer markdownu w węźle ogarnia `**bold**`, `*kursywę*`, `` `kod` `` i wypunktowania;
+  reszta składni przechodzi jako tekst, a wszystko jest escape'owane (`&`, `<`, `>`).
 
 **Dlaczego tak:** wersja z jednym promptem padała na `Prompt is too long`
 (~1,32 M tokenów przy limicie 1 M) — proxy zwracało wtedy 502, a n8n pokazywał
@@ -62,8 +109,9 @@ posortowane po dacie** (Google News wrzuca między świeże newsy pozycje z 2004
 więc kod sortuje je przed cięciem — bez tego cap obcinałby losowe, nie najstarsze.
 
 Odporność: `Claude Code (per ticker)` ma retry ×2 i `continueRegularOutput`, więc jedna
-padnięta spółka nie zabija przebiegu (ląduje w stopce maila). Gdy padnie etap rankingu,
-mail i tak wychodzi — z koszykami posklejanymi w kodzie.
+padnięta spółka nie zabija przebiegu (trafia do banera ostrzeżeń w mailu). Gdy padnie etap
+rankingu, mail i tak wychodzi w pełnym układzie — bez nagłówka dnia i makro, z kolejnością
+spółek w koszykach taką, w jakiej przyszły.
 
 ### `stock-analysis-claude-code.json` — pytanie w czacie
 Wpisujesz **dowolne pytanie** („co z CDR przed Gamescomem?”, „porównaj PKO i PEO”),

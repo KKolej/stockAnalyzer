@@ -5,6 +5,7 @@ import pandas as pd
 
 from stock_agents.agents.speculator.models import Catalyst, PatternResult
 from stock_agents.agents.speculator.signals import _relevant_patterns, build_projections
+from stock_agents.agents.technical import fetcher
 from stock_agents.agents.technical.fetcher import data_staleness
 from stock_agents.ticker_map import BANKIER_SLUGS, company_identity_tokens
 
@@ -81,3 +82,59 @@ class TestPatternGating:
         )
         assert proj
         assert all(p.is_backtested is False for p in proj)
+
+
+class TestLastSessionRepair:
+    """Yahoo publishes the newest GPW candle with OHLV but no Close.
+
+    `dropna(subset=["Close"])` then removed the whole session: on 2026-08-02 all 18 GPW
+    tickers of the daily review reported 30.07 as the last date while `info` already had
+    the 31.07 close, so /technical and /fundamental quoted two different prices for one day.
+    """
+
+    @staticmethod
+    def _frame() -> pd.DataFrame:
+        return pd.DataFrame(
+            {"Open": [109.5, float("nan")], "High": [113.5, float("nan")],
+             "Low": [108.8, float("nan")], "Close": [113.44, float("nan")],
+             "Volume": [3588643, 3659071]},
+            index=pd.to_datetime(["2026-07-30", "2026-07-31"]),
+        )
+
+    def test_missing_close_is_filled_from_the_live_quote(self, monkeypatch):
+        raw = pd.DataFrame(
+            {"Open": [113.9], "High": [114.1], "Low": [111.44], "Close": [float("nan")],
+             "Volume": [3659071]},
+            index=pd.to_datetime(["2026-07-31"]),
+        )
+        monkeypatch.setattr(fetcher, "_last_quote", lambda _s: 111.92)
+        monkeypatch.setattr(fetcher, "_download_unadjusted", lambda *_a: raw)
+
+        out, source = fetcher.repair_last_session(self._frame(), "PKO.WA")
+
+        assert source == "fast_info"
+        assert out["Close"].iloc[-1] == 111.92
+        assert out["High"].iloc[-1] == 114.1        # range taken from the unadjusted frame
+        assert data_staleness(out.reset_index(names="Date"))["last_date"] == "2026-07-31"
+
+    def test_quote_outside_the_session_range_is_rejected(self, monkeypatch):
+        # A stale or foreign quote must not invent a candle — better one session missing
+        # (and flagged) than a price that never traded that day.
+        raw = pd.DataFrame(
+            {"Open": [113.9], "High": [114.1], "Low": [111.44], "Close": [float("nan")],
+             "Volume": [3659071]},
+            index=pd.to_datetime(["2026-07-31"]),
+        )
+        monkeypatch.setattr(fetcher, "_last_quote", lambda _s: 250.0)
+        monkeypatch.setattr(fetcher, "_download_unadjusted", lambda *_a: raw)
+
+        out, source = fetcher.repair_last_session(self._frame(), "PKO.WA")
+
+        assert source == "dropped"
+        assert pd.isna(out["Close"].iloc[-1])
+
+    def test_complete_candle_is_left_alone(self):
+        df = self._frame().iloc[:1]
+        out, source = fetcher.repair_last_session(df, "PKO.WA")
+        assert source == "history"
+        assert out["Close"].iloc[-1] == 113.44
