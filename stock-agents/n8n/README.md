@@ -116,8 +116,14 @@ spółek w koszykach taką, w jakiej przyszły.
 ### `stock-analysis-claude-code.json` — pytanie w czacie
 Wpisujesz **dowolne pytanie** („co z CDR przed Gamescomem?”, „porównaj PKO i PEO”),
 workflow sam wyłuskuje tickery (do 3), pobiera dla nich komplet danych i **odpowiada
-w czacie** — bez maila. Ten sam zestaw reguł antyhalucynacyjnych co przegląd dzienny.
-Uruchamianie: otwórz workflow → **Open Chat** (dół ekranu).
+w czacie** — bez maila. Uruchamianie: otwórz workflow → **Open Chat** (dół ekranu).
+
+**Pod spodem działa tak samo jak przegląd dzienny** — różni się tylko wejściem (wolne
+pytanie zamiast listy) i wyjściem (czat zamiast maila): ten sam zestaw reguł
+antyhalucynacyjnych, ten sam `trimSentiment()` i te same **oceny w horyzontach**
+(pomijane tylko wtedy, gdy pytanie dotyczy jednej konkretnej liczby).
+Przy zmianie reguł w jednym prompcie przenieś je do drugiego — inaczej czat i mail
+zaczną odpowiadać różnie na to samo pytanie.
 
 ### `stock-analysis-workflow.json` — AI Agent (płatne API)
 Endpointy podpięte jako narzędzia (tools) AI Agenta; agent sam decyduje, co wywołać.
