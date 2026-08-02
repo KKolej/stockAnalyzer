@@ -29,11 +29,41 @@ python3 scripts/claude_proxy.py     # nasłuchuje na :8787
 Workflowy proxy wysyłają `"model": "opus"`. Bez tego pola `claude -p` bierze
 **domyślny model konta (Sonnet)** — łatwo tego nie zauważyć, bo odpowiedź i tak przychodzi.
 
+W `wig20-daily.json` etap per-spółkę robi 20 wywołań pod rząd. Jeśli subskrypcja zacznie
+przycinać, zmień `"model": "opus"` na `"sonnet"` w węźle `Claude Code (per ticker)` —
+etap rankingu (`Claude Code (ranking)`) to jedno tanie wywołanie i może zostać na Opusie.
+
 ## Workflowy
 
 ### `wig20-daily.json` — dzienny przegląd (schedule 08:00)
 Pobiera 5 endpointów × ~20 spółek + makro, robi przegląd w dwóch częściach
 (koszyki 🟢/🔴/🟡 + szczegóły) i **wysyła mailem**.
+
+Działa w trybie **map-reduce**, nie jednym wielkim promptem:
+
+1. `Fetch data (sequential)` — pobiera dane i emituje **jeden item na spółkę**.
+2. `Loop over tickers` (batch 1) → `Claude Code (per ticker)` — analiza JEDNEJ spółki
+   (~9k tokenów). Zwraca `###KOSZYK### / ###LINIA### / ###SZCZEGOLY###`.
+3. `Build ranking prompt` → `Claude Code (ranking)` — dostaje tylko 20 jednozdaniowych
+   ocen + makro (~15k tokenów) i układa Część 1.
+4. `Assemble e-mail` — skleja Część 1 z blokami szczegółów spółek 🟢/🔴.
+
+**Dlaczego tak:** wersja z jednym promptem padała na `Prompt is too long`
+(~1,32 M tokenów przy limicie 1 M) — proxy zwracało wtedy 502, a n8n pokazywał
+mylące „Bad gateway" po 5 sekundach. Winowajcą był sentyment: **95% promptu**,
+w tym ~10k tokenów na spółkę samych base64-owych URL-i z Google News, których
+raport i tak nigdy nie cytuje.
+
+`trimSentiment()` w węźle `Fetch data (sequential)` wycina URL-e, zawęża wzmianki
+do 90 dni i tnie do 40 na źródło: **25k → 5,2k tokenów na spółkę**, przy nietkniętych
+`total_mentions` i `overall_score` (liczonych przez API na pełnym zbiorze — dlatego
+zasada 11 w prompcie mówi modelowi, że widzi wycinek). Wzmianki **nie przychodzą
+posortowane po dacie** (Google News wrzuca między świeże newsy pozycje z 2004 r.),
+więc kod sortuje je przed cięciem — bez tego cap obcinałby losowe, nie najstarsze.
+
+Odporność: `Claude Code (per ticker)` ma retry ×2 i `continueRegularOutput`, więc jedna
+padnięta spółka nie zabija przebiegu (ląduje w stopce maila). Gdy padnie etap rankingu,
+mail i tak wychodzi — z koszykami posklejanymi w kodzie.
 
 ### `stock-analysis-claude-code.json` — pytanie w czacie
 Wpisujesz **dowolne pytanie** („co z CDR przed Gamescomem?”, „porównaj PKO i PEO”),

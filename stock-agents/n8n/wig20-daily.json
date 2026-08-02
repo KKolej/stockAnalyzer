@@ -19,7 +19,7 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        -300,
+        -460,
         300
       ]
     },
@@ -42,20 +42,34 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -160,
+        -300,
         300
       ]
     },
     {
       "parameters": {
-        "jsCode": "// The ticker list comes from the \"Ticker list (edit here)\" node — edit it THERE, not in code.\nconst raw = $('Ticker list (edit here)').first().json.tickers || '';\nconst WIG20 = String(raw).split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);\nif (WIG20.length === 0) { throw new Error('Pusta lista spółek — uzupełnij węzeł \"Lista spółek (edytuj)\"'); }\nconst base = 'http://stock-api:8000';\nconst H = this.helpers;\nfunction sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }\n// Fetched SEQUENTIALLY — concurrency breaks yfinance (401 \"Invalid Crumb\").\n// One retry with backoff in case of a transient block. ~70s for the whole WIG20.\nasync function g(path) {\n  for (let attempt = 0; attempt < 2; attempt++) {\n    try { return await H.httpRequest({ url: base + path, json: true, timeout: 60000 }); }\n    catch (e) {\n      if (attempt === 0) { await sleep(1200); continue; }\n      return { error: String((e && e.message) || e) };\n    }\n  }\n}\nconst macro = await g('/macro');\nconst spolki = [];\nfor (const t of WIG20) {\n  // ALL analysis endpoints per company\n  const technical = await g(`/technical/${t}`);\n  const fundamental = await g(`/fundamental/${t}`);\n  const dcf = await g(`/dcf/${t}`);\n  const sentiment = await g(`/sentiment/${t}`);\n  const speculator = await g(`/speculator/${t}`);\n  spolki.push({ ticker: t, technical, fundamental, dcf, sentiment, speculator });\n}\nconst kiedy = new Date().toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' });\nconst prompt =\n  `Dzienny przegląd WIG20. Data/godzina: ${kiedy}.\\n\\n` +\n  `KONTEKST MAKRO:\\n${JSON.stringify(macro, null, 1)}\\n\\n` +\n  `DANE SPÓŁEK (technical, fundamental, dcf, sentiment, speculator):\\n` +\n  `${JSON.stringify(spolki, null, 1)}`;\nreturn [{ json: { prompt, count: spolki.length } }];"
+        "jsCode": "// The ticker list comes from the \"Ticker list (edit here)\" node — edit it THERE, not in code.\nconst raw = $('Ticker list (edit here)').first().json.tickers || '';\nconst WIG20 = String(raw).split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);\nif (WIG20.length === 0) { throw new Error('Pusta lista spółek — uzupełnij węzeł \"Ticker list (edit here)\"'); }\nconst base = 'http://stock-api:8000';\nconst H = this.helpers;\n\n// Sentiment is ~95% of the payload: one ticker ships 128 Google News items whose\n// base64 redirect URLs alone cost ~10k tokens. Stripping them plus a 90-day window\n// takes a ticker from ~33k to ~9k tokens — that is what blew the 1M limit.\nconst NEWS_WINDOW_DAYS = 90;\nconst MAX_MENTIONS_PER_SOURCE = 40;\n\nfunction sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }\n\n// Fetched SEQUENTIALLY — concurrency breaks yfinance (401 \"Invalid Crumb\").\n// One retry with backoff in case of a transient block. ~70s for the whole WIG20.\nasync function g(path) {\n  for (let attempt = 0; attempt < 2; attempt++) {\n    try { return await H.httpRequest({ url: base + path, json: true, timeout: 60000 }); }\n    catch (e) {\n      if (attempt === 0) { await sleep(1200); continue; }\n      return { error: String((e && e.message) || e) };\n    }\n  }\n}\n\nfunction trimSentiment(s) {\n  if (!s || !Array.isArray(s.results)) { return s; }\n  const cutoff = Date.now() - NEWS_WINDOW_DAYS * 86400000;\n  for (const src of s.results) {\n    const mentions = Array.isArray(src.mentions) ? src.mentions : [];\n    const dated = [];\n    const undated = [];\n    for (const m of mentions) {\n      const t = m.date ? Date.parse(m.date) : NaN;\n      if (Number.isNaN(t)) { undated.push(m); }        // Bankier ships no dates — keep them\n      else if (t >= cutoff) { dated.push([t, m]); }\n    }\n    // Mentions arrive UNSORTED (Google News mixes in items from 2004), so sorting\n    // before the cap is what makes the cap drop the oldest instead of random ones.\n    dated.sort((a, b) => b[0] - a[0]);\n    const kept = [...dated.map((p) => p[1]), ...undated].slice(0, MAX_MENTIONS_PER_SOURCE);\n    src.mentions = kept.map((m) => {\n      const { url, ...rest } = m;                       // URLs are never cited in the e-mail\n      return rest;\n    });\n    src.mentions_shown = src.mentions.length;           // total_mentions/overall_score untouched\n  }\n  return s;\n}\n\nconst macro = await g('/macro');\nconst out = [];\nfor (const t of WIG20) {\n  const technical = await g(`/technical/${t}`);\n  const fundamental = await g(`/fundamental/${t}`);\n  const dcf = await g(`/dcf/${t}`);\n  const sentiment = trimSentiment(await g(`/sentiment/${t}`));\n  const speculator = await g(`/speculator/${t}`);\n  const dane = { technical, fundamental, dcf, sentiment, speculator };\n  // Compact JSON, not indent:1 — pretty-printing added ~30% for zero benefit.\n  const prompt = `Spółka ${t}. Surowe dane wszystkich agentów:\\n${JSON.stringify(dane)}`;\n  out.push({\n    json: {\n      ticker: t,\n      prompt,\n      quality: (technical && technical.data_quality) || null,\n      macro,\n      chars: prompt.length,\n    },\n  });\n}\nreturn out;"
       },
       "id": "collect",
       "name": "Fetch data (sequential)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        60,
+        -120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop",
+      "name": "Loop over tickers",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        80,
         300
       ]
     },
@@ -65,18 +79,81 @@
         "url": "http://host.docker.internal:8787",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ {\"prompt\": $json.prompt, \"system\": \"Jesteś analitykiem giełdowym. Dostajesz KOMPLET surowych danych per spółka WIG20\\n(technical, fundamental, dcf, sentiment, speculator) + makro. To dane od dostawcy, nie od analityka.\\n\\n═══ ŻELAZNE ZASADY (łamanie ich = raport do kosza) ═══\\n\\n1. ZERO LICZB SPOZA DANYCH. Każda liczba w raporcie musi pochodzić z JSON-a wejściowego.\\n   Nie licz w pamięci, nie uzupełniaj z własnej wiedzy o rynku, nie zaokrąglaj w drugą stronę.\\n\\n2. SUPERLATYWY TYLKO PO PRZELICZENIU CAŁEGO ZESTAWU. Słowa \\\"najwyższy\\\", \\\"najniższy\\\",\\n   \\\"najmocniejszy\\\", \\\"jedyny\\\", \\\"największy\\\" wolno użyć wyłącznie po sprawdzeniu WSZYSTKICH\\n   spółek/sektorów w danych. Jeśli nie chce Ci się sprawdzić — nie używaj tych słów.\\n   Zanim napiszesz superlatyw, wypisz sobie w głowie wartości dla wszystkich pozycji.\\n\\n3. BRAK SPRZECZNOŚCI WEWNĘTRZNYCH. Przed wysłaniem sprawdź, czy Część 1 zgadza się z Częścią 2\\n   i czy ta sama liczba nie występuje w dwóch wersjach.\\n\\n4. ŚWIEŻOŚĆ DANYCH. Na starcie raportu podaj `technical.data_quality.last_date` i — jeśli\\n   `is_stale=true` lub `missing_sessions>=1` — napisz WYRAŹNIE, że analiza stoi na danych\\n   sprzed N sesji. Giełda w weekend jest zamknięta: pisz \\\"na zamknięciu DD.MM\\\", nigdy \\\"rośnie\\\"\\n   w czasie teraźniejszym.\\n\\n5. OKNO METRYK RYZYKA. `risk.period_days` to zwykle ~89 dni. Sharpe/Sortino/CAGR/drawdown są\\n   z TEGO okna i annualizowane. Nigdy nie nazywaj tego \\\"rokiem\\\" ani \\\"ostatnim rokiem\\\" —\\n   pisz np. \\\"Sharpe 3.06 (okno 89 dni)\\\".\\n\\n6. CENY DOCELOWE ANALITYKÓW — ZAWSZE, W OBIE STRONY. Jeśli wzorzec \\\"Rekomendacje analityków\\\"\\n   istnieje, MUSISZ podać cel i porównać z ceną, także gdy cel jest PONIŻEJ ceny. Podaj datę\\n   najnowszej rekomendacji z pola `note` — rekomendacja sprzed pół roku to nie jest \\\"konsensus\\\".\\n\\n7. WZORCE BEZ TRIGGERA. Wzorzec z `requires_event` i `event_days_away: null` NIE MA nadchodzącego\\n   zdarzenia — nie wolno go używać jako argumentu za ruchem. Możesz go najwyżej wymienić jako\\n   kontekst historyczny z adnotacją \\\"brak triggera\\\".\\n\\n8. PROJEKCJE TO NIE PROGNOZY. `projections` mają `is_backtested: false` — `probability` to\\n   zgodność ważonych sygnałów, NIE zweryfikowane prawdopodobieństwo. Pisz \\\"model szacuje\\\",\\n   \\\"historycznie\\\", nigdy \\\"przewiduje\\\" ani \\\"wzrośnie o X%\\\".\\n\\n9. WIELKOŚĆ PRÓBY. Przy każdym wzorcu sezonowym/dywidendowym podaj `sample_size`\\n   (\\\"8/10 przypadków, próba 10 zdarzeń\\\"). Samo \\\"80% trafności\\\" jest zakazane.\\n\\n10. SENTYMENT — TYLKO Z NAGŁÓWKÓW. Uzasadniaj wydźwięk WYŁĄCZNIE tytułami obecnymi w\\n    `sentiment.results[].mentions`. Jeśli źródło ma `error`, napisz które źródła padły.\\n    Gdy `total_mentions < 10` albo działa tylko jedno źródło — oznacz sentyment jako\\n    niskiej wiarygodności i nie buduj na nim narracji. Nigdy nie dopisuj wydarzeń,\\n    których nie ma w tytułach.\\n\\n11. MAKRO. `wig20_pos_52w` i `sectors[].pos_52w` używaj tylko gdy `pos_52w_source` jest\\n    ustawione. Inflację opisuj z `cpi_change_pp`: dodatnie = przyspiesza, ujemne = zwalnia.\\n    \\\"Stabilna\\\" tylko przy zmianie ok. 0.0 p.p.\\n\\n12. INSIDERZY. Formułuj jako zależność historyczną (\\\"wzmożona sprzedaż insiderów historycznie\\n    poprzedzała słabszy kurs\\\"), nigdy jako pewny sygnał.\\n\\n13. Blok z polem `error` lub `available:false` (np. DCF) — napisz o tym i pomiń tę część.\\n    To analiza danych, NIE rekomendacja inwestycyjna.\\n\\n═══ CZĘŚĆ 1: PRZEGLĄD ═══\\nNagłówek: data raportu + data ostatniej sesji w danych + ostrzeżenie o nieświeżości (jeśli jest).\\nPotem KAŻDA spółka w dokładnie jednej linii, pogrupowana w trzy koszyki (i tylko te trzy):\\n\\n  🟢 NAJCIEKAWSZE — silny spójny sygnał w górę\\n  🔴 WYSOKIE RYZYKO — silny sygnał w dół albo wyraźna rozbieżność na niekorzyść\\n  🟡 OBSERWACJA — reszta\\n\\nFormat linii: `TICKER — sygnał w jednym zdaniu (konkretna liczba + jej źródło)`.\\nZakaz wypełniaczy typu \\\"warto zerknąć\\\" — każda linia ma nieść informację.\\n\\n═══ CZĘŚĆ 2: SZCZEGÓŁY ═══\\nTylko 🟢 i 🔴. Dla każdej spółki trzy WYRAŹNIE oddzielone bloki:\\n\\n  **Fakty** — liczby z danych (technika, fundamenty, DCF, kalendarz katalizatorów).\\n  **Model** — co mówią wzorce i projekcje, z próbą i zastrzeżeniem o braku backtestu.\\n  **Interpretacja** — Twój wniosek, jawnie oznaczony jako opinia, z ROZBIEŻNOŚCIAMI\\n  (np. mocna technika przy drogiej wycenie) i z argumentami przeciw.\\n\\nNa końcu 2–3 zdania makro: waluty, WIG20, sektory, inflacja + jak to zmienia obraz.\\nZwięźle i po polsku.\", \"model\": \"opus\"} }}",
+        "jsonBody": "={{ {\"prompt\": $json.prompt, \"system\": \"Jesteś analitykiem giełdowym. Dostajesz KOMPLET surowych danych JEDNEJ spółki\\n(technical, fundamental, dcf, sentiment, speculator). To dane od dostawcy, nie od analityka.\\n\\n═══ ŻELAZNE ZASADY (łamanie ich = raport do kosza) ═══\\n\\n1. ZERO LICZB SPOZA DANYCH. Każda liczba w raporcie musi pochodzić z JSON-a wejściowego.\\n   Nie licz w pamięci, nie uzupełniaj z własnej wiedzy o rynku, nie zaokrąglaj w drugą stronę.\\n\\n2. WIDZISZ TYLKO JEDNĄ SPÓŁKĘ. Zakaz porównań z innymi spółkami i zakaz superlatywów\\n   („najwyższy\\\", „najniższy\\\", „najmocniejszy\\\", „jedyny\\\", „największy\\\") — nie masz danych,\\n   żeby to sprawdzić. Ranking całego indeksu robi osobny etap.\\n\\n3. BRAK SPRZECZNOŚCI WEWNĘTRZNYCH. Przed wysłaniem sprawdź, czy ta sama liczba nie\\n   występuje u Ciebie w dwóch wersjach.\\n\\n4. ŚWIEŻOŚĆ DANYCH. Jeśli `technical.data_quality.is_stale=true` lub `missing_sessions>=1`,\\n   napisz WYRAŹNIE, że analiza stoi na danych sprzed N sesji. Giełda w weekend jest zamknięta:\\n   pisz „na zamknięciu DD.MM\\\", nigdy „rośnie\\\" w czasie teraźniejszym.\\n\\n5. OKNO METRYK RYZYKA. `risk.period_days` to zwykle ~89 dni. Sharpe/Sortino/CAGR/drawdown są\\n   z TEGO okna i annualizowane. Nigdy nie nazywaj tego „rokiem\\\" ani „ostatnim rokiem\\\" —\\n   pisz np. „Sharpe 3.06 (okno 89 dni)\\\".\\n\\n6. CENY DOCELOWE ANALITYKÓW — ZAWSZE, W OBIE STRONY. Jeśli wzorzec „Rekomendacje analityków\\\"\\n   istnieje, MUSISZ podać cel i porównać z ceną, także gdy cel jest PONIŻEJ ceny. Podaj datę\\n   najnowszej rekomendacji z pola `note` — rekomendacja sprzed pół roku to nie jest „konsensus\\\".\\n\\n7. WZORCE BEZ TRIGGERA. Wzorzec z `requires_event` i `event_days_away: null` NIE MA nadchodzącego\\n   zdarzenia — nie wolno go używać jako argumentu za ruchem. Możesz go najwyżej wymienić jako\\n   kontekst historyczny z adnotacją „brak triggera\\\".\\n\\n8. PROJEKCJE TO NIE PROGNOZY. `projections` mają `is_backtested: false` — `probability` to\\n   zgodność ważonych sygnałów, NIE zweryfikowane prawdopodobieństwo. Pisz „model szacuje\\\",\\n   „historycznie\\\", nigdy „przewiduje\\\" ani „wzrośnie o X%\\\".\\n\\n9. WIELKOŚĆ PRÓBY. Przy każdym wzorcu sezonowym/dywidendowym podaj `sample_size`\\n   („8/10 przypadków, próba 10 zdarzeń\\\"). Samo „80% trafności\\\" jest zakazane.\\n\\n10. SENTYMENT — TYLKO Z NAGŁÓWKÓW. Uzasadniaj wydźwięk WYŁĄCZNIE tytułami obecnymi w\\n    `sentiment.results[].mentions`. Jeśli źródło ma `error`, napisz które źródła padły.\\n    Gdy `total_mentions < 10` albo działa tylko jedno źródło — oznacz sentyment jako\\n    niskiej wiarygodności i nie buduj na nim narracji. Nigdy nie dopisuj wydarzeń,\\n    których nie ma w tytułach.\\n\\n11. LISTA WZMIANEK TO WYCINEK. `mentions` zawiera tylko ostatnie 90 dni (ile sztuk —\\n    pole `mentions_shown`), a `total_mentions` i `overall_score` policzono na PEŁNYM\\n    zbiorze. Nie pisz, że wzmianek jest tyle, ile widzisz na liście.\\n\\n12. INSIDERZY. Formułuj jako zależność historyczną („wzmożona sprzedaż insiderów historycznie\\n    poprzedzała słabszy kurs\\\"), nigdy jako pewny sygnał.\\n\\n13. Blok z polem `error` lub `available:false` (np. DCF) — napisz o tym i pomiń tę część.\\n    To analiza danych, NIE rekomendacja inwestycyjna.\\n\\n═══ FORMAT ODPOWIEDZI ═══\\nOdpowiadasz DOKŁADNIE w poniższym formacie — bez wstępu, bez podsumowania na końcu,\\nbez bloków kodu. Znaczniki ### muszą wystąpić dosłownie, każdy w swojej linii.\\n\\n###KOSZYK###\\n<jeden emoji, nic więcej: 🟢 albo 🔴 albo 🟡>\\n  🟢 = silny, spójny sygnał w górę\\n  🔴 = silny sygnał w dół albo wyraźna rozbieżność na niekorzyść\\n  🟡 = wszystko pozostałe\\n###LINIA###\\nTICKER — sygnał w jednym zdaniu (konkretna liczba + jej źródło).\\nZakaz wypełniaczy typu „warto zerknąć\\\" — linia ma nieść informację.\\n###SZCZEGOLY###\\nTrzy WYRAŹNIE oddzielone bloki:\\n\\n**Fakty** — liczby z danych (technika, fundamenty, DCF, kalendarz katalizatorów).\\n**Model** — co mówią wzorce i projekcje, z próbą i zastrzeżeniem o braku backtestu.\\n**Interpretacja** — Twój wniosek, jawnie oznaczony jako opinia, z ROZBIEŻNOŚCIAMI\\n(np. mocna technika przy drogiej wycenie) i z argumentami przeciw.\\n\\nJeśli KOSZYK to 🟡 — sekcję ###SZCZEGOLY### pomiń CAŁKOWICIE (nie wypisuj nawet znacznika).\\nZwięźle i po polsku.\", \"model\": \"opus\"} }}",
         "options": {
-          "timeout": 900000
+          "timeout": 600000
         }
       },
-      "id": "claude",
-      "name": "Claude Code (review)",
+      "id": "claudemap",
+      "name": "Claude Code (per ticker)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        160,
-        300
+        300,
+        460
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parses the per-ticker review back into {bucket, line, details}.\n// Marker-based rather than JSON, because `claude -p` returns prose and wraps JSON in fences.\nconst res = $input.first().json;\nconst ticker = $('Loop over tickers').first().json.ticker;\nconst quality = $('Loop over tickers').first().json.quality || null;\n\nif (res.error || !res.response) {\n  const why = String(res.error || 'brak odpowiedzi z proxy');\n  return [{ json: { ticker, bucket: '🟡', line: `${ticker} — BŁĄD ANALIZY: ${why}`, details: '', quality, failed: true } }];\n}\n\nconst raw = String(res.response);\nfunction section(name, next) {\n  const re = new RegExp(`###${name}###\\\\s*([\\\\s\\\\S]*?)(?=###(?:${next})###|$)`);\n  const m = raw.match(re);\n  return m ? m[1].trim() : '';\n}\nconst bucketRaw = section('KOSZYK', 'LINIA|SZCZEGOLY');\nconst line = section('LINIA', 'SZCZEGOLY');\nconst details = section('SZCZEGOLY', 'KOSZYK');\n\n// Fallback when the model ignores the format: never drop a company from the report.\nconst bucket = ['🟢', '🔴', '🟡'].find((b) => bucketRaw.includes(b)) || '🟡';\nconst firstLine = raw.split('\\n').map((s) => s.trim()).filter(Boolean)[0] || `${ticker} — brak treści`;\n\nreturn [{ json: { ticker, bucket, line: line || firstLine, details, quality, failed: false } }];"
+      },
+      "id": "gather",
+      "name": "Collect review",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reduce stage: 20 one-liners (~15k tokens total) instead of 20x raw JSON.\nconst spolki = $input.all().map((i) => i.json);\nconst macro = $('Fetch data (sequential)').first().json.macro;\nconst kiedy = new Date().toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' });\n\nconst swiezosc = spolki.map((s) => {\n  const q = s.quality || {};\n  return `${s.ticker}: last_date=${q.last_date ?? '?'} is_stale=${q.is_stale ?? '?'} missing_sessions=${q.missing_sessions ?? '?'}`;\n}).join('\\n');\n\nconst linie = spolki.map((s) => `${s.bucket} ${s.line}`).join('\\n');\n\nconst prompt =\n  `Dzienny przegląd WIG20. Data/godzina: ${kiedy}. Spółek: ${spolki.length}.\\n\\n` +\n  `OCENY SPÓŁEK (koszyk już przypisany):\\n${linie}\\n\\n` +\n  `ŚWIEŻOŚĆ DANYCH:\\n${swiezosc}\\n\\n` +\n  `MAKRO:\\n${JSON.stringify(macro)}`;\n\nreturn [{ json: { prompt, spolki } }];"
+      },
+      "id": "rank",
+      "name": "Build ranking prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8787",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\"prompt\": $json.prompt, \"system\": \"Jesteś redaktorem dziennego przeglądu WIG20. Dostajesz gotowe, jednozdaniowe oceny\\nposzczególnych spółek (każda z już przypisanym koszykiem), informacje o świeżości danych\\ni blok makro. NIE masz surowych danych spółek.\\n\\n═══ ŻELAZNE ZASADY ═══\\n\\n1. ZERO NOWYCH LICZB. Każda liczba musi pochodzić z otrzymanych linii albo z bloku MAKRO.\\n   Nie dopisuj nic z własnej wiedzy o rynku.\\n\\n2. SUPERLATYWY TYLKO PO PRZELICZENIU CAŁEGO ZESTAWU. Słowa „najwyższy\\\", „najniższy\\\",\\n   „najmocniejszy\\\", „jedyny\\\", „największy\\\" wolno użyć wyłącznie po sprawdzeniu WSZYSTKICH\\n   otrzymanych linii i sektorów. Jeśli nie chce Ci się sprawdzić — nie używaj tych słów.\\n\\n3. NIE PRZENOSISZ SPÓŁEK MIĘDZY KOSZYKAMI. Koszyk jest już przypisany — Twoim zadaniem\\n   jest kolejność wewnątrz koszyka (najmocniejszy sygnał na górze) i nagłówek.\\n\\n4. LINIE PRZEPISUJESZ W CAŁOŚCI, bez skracania i bez zmiany liczb.\\n\\n5. ŚWIEŻOŚĆ. Z bloku ŚWIEŻOŚĆ weź najstarszą `last_date`; jeśli którakolwiek spółka ma\\n   `is_stale=true` lub `missing_sessions>=1`, napisz w nagłówku WYRAŹNIE, że analiza\\n   stoi na danych sprzed N sesji.\\n\\n6. MAKRO. `wig20_pos_52w` i `sectors[].pos_52w` używaj tylko gdy `pos_52w_source` jest\\n   ustawione. Inflację opisuj z `cpi_change_pp`: dodatnie = przyspiesza, ujemne = zwalnia.\\n   „Stabilna\\\" tylko przy zmianie ok. 0.0 p.p.\\n\\n═══ FORMAT ODPOWIEDZI ═══\\nDokładnie taki, bez wstępu i bez bloków kodu:\\n\\n###NAGLOWEK###\\nData raportu + data ostatniej sesji w danych + ostrzeżenie o nieświeżości (jeśli jest).\\n###PRZEGLAD###\\n🟢 NAJCIEKAWSZE\\n<linie tych spółek, jedna na wiersz, uporządkowane>\\n\\n🔴 WYSOKIE RYZYKO\\n<linie>\\n\\n🟡 OBSERWACJA\\n<linie>\\n\\n(koszyk bez spółek: napisz „— brak\\\")\\n###MAKRO###\\n2–3 zdania: waluty, WIG20, sektory, inflacja + jak to zmienia obraz.\\nZwięźle i po polsku.\", \"model\": \"opus\"} }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "id": "claudereduce",
+      "name": "Claude Code (ranking)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Part 1 comes from the ranking call, Part 2 is stitched from the per-ticker blocks —\n// no LLM ever has to hold all 20 companies' raw data at once.\nconst res = $input.first().json;\nconst spolki = $('Build ranking prompt').first().json.spolki;\n\nlet czesc1;\nif (res.error || !res.response) {\n  // Ranking failed — still send the report; the per-ticker work is already paid for.\n  const grupy = { '🟢': 'NAJCIEKAWSZE', '🔴': 'WYSOKIE RYZYKO', '🟡': 'OBSERWACJA' };\n  czesc1 = `[Etap rankingu nie odpowiedział: ${res.error || 'brak odpowiedzi'} — poniżej surowe koszyki]\\n\\n` +\n    Object.entries(grupy).map(([b, nazwa]) => {\n      const w = spolki.filter((s) => s.bucket === b).map((s) => `  ${s.line}`);\n      return `${b} ${nazwa}\\n${w.length ? w.join('\\n') : '  — brak'}`;\n    }).join('\\n\\n');\n} else {\n  czesc1 = String(res.response)\n    .replace(/###NAGLOWEK###\\s*/g, '')\n    .replace(/###PRZEGLAD###\\s*/g, '\\n═══ CZĘŚĆ 1: PRZEGLĄD ═══\\n\\n')\n    .replace(/###MAKRO###\\s*/g, '\\n═══ MAKRO ═══\\n\\n')\n    .trim();\n}\n\nconst szczegoly = ['🟢', '🔴']\n  .flatMap((b) => spolki.filter((s) => s.bucket === b && s.details))\n  .map((s) => `${s.bucket} ${s.ticker}\\n\\n${s.details}`)\n  .join('\\n\\n' + '─'.repeat(60) + '\\n\\n');\n\nconst bledy = spolki.filter((s) => s.failed).map((s) => s.ticker);\nconst stopka = bledy.length ? `\\n\\n⚠️ Spółki bez analizy (błąd wywołania): ${bledy.join(', ')}` : '';\n\nconst text = szczegoly\n  ? `${czesc1}\\n\\n\\n═══ CZĘŚĆ 2: SZCZEGÓŁY ═══\\n\\n${szczegoly}${stopka}`\n  : `${czesc1}\\n\\n(Brak spółek w koszykach 🟢/🔴 — część szczegółowa pusta.)${stopka}`;\n\nreturn [{ json: { text } }];"
+      },
+      "id": "assemble",
+      "name": "Assemble e-mail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        140
       ]
     },
     {
@@ -85,7 +162,7 @@
         "toEmail": "b.kolej@gmail.com",
         "subject": "=WIG20 — przegląd dzienny {{ $now.toFormat('dd.MM.yyyy') }}",
         "emailFormat": "text",
-        "text": "={{ $json.response }}",
+        "text": "={{ $json.text }}",
         "options": {}
       },
       "id": "email",
@@ -93,8 +170,8 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        400,
-        300
+        840,
+        140
       ],
       "credentials": {
         "smtp": {
@@ -131,14 +208,76 @@
       "main": [
         [
           {
-            "node": "Claude Code (review)",
+            "node": "Loop over tickers",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Claude Code (review)": {
+    "Loop over tickers": {
+      "main": [
+        [
+          {
+            "node": "Build ranking prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude Code (per ticker)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Code (per ticker)": {
+      "main": [
+        [
+          {
+            "node": "Collect review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect review": {
+      "main": [
+        [
+          {
+            "node": "Loop over tickers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build ranking prompt": {
+      "main": [
+        [
+          {
+            "node": "Claude Code (ranking)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Code (ranking)": {
+      "main": [
+        [
+          {
+            "node": "Assemble e-mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble e-mail": {
       "main": [
         [
           {
