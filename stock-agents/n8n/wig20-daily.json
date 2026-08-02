@@ -31,7 +31,7 @@
               "id": "tk",
               "name": "tickers",
               "type": "string",
-              "value": "PKO,PKN,PEO,PZU,KGHM,DNP,ALE,CDR,LPP,SPL,PGE,CPS,OPL,KTY,MBK,BDX,PCO,OML,ZAB"
+              "value": "PKO,PKN,PEO,PZU,KGHM,DNP,ALE,CDR,LPP,EBP,PGE,CPS,OPL,KTY,MBK,BDX,PCO,OML,ZAB"
             }
           ]
         },
