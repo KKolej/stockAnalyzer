@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .routes import (
     analyze,
+    backtest,
     broker,
     compare,
     dcf,
@@ -32,6 +33,7 @@ app.add_middleware(
 )
 
 app.include_router(technical.router)
+app.include_router(backtest.router)
 app.include_router(fundamental.router)
 app.include_router(screener.router)
 app.include_router(speculator.router)
@@ -70,6 +72,7 @@ async def index() -> dict[str, dict[str, str]]:
             "GET /health": "ping",
             "GET /version": "git SHA + czas budowy obrazu (kontrola świeżości wdrożenia)",
             "GET /technical/{ticker}": "analiza techniczna, ?days=90",
+            "GET /backtest/{ticker}": "skuteczność sygnałów na historii spółki, ?years=5",
             "GET /fundamental/{ticker}": "analiza fundamentalna",
             "GET /screener": "screener, ?tickers=CDR,PKO&pe_max=20&sort_by=pe",
             "GET /speculator/{ticker}": "wzorce, katalyzatory, projekcje",

@@ -5,6 +5,8 @@ does not drop data, while still documenting the contract for consumers (n8n).
 """
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -111,6 +113,74 @@ class TechnicalResponse(_Base):
     risk: Risk | None = None
     data_quality: DataQuality | None = None
     score: int | None = None
+    error: str | None = None
+
+
+# ── Backtest (reliability of signals) ────────────────────────────────────────
+class BacktestHorizon(_Base):
+    horizon_days: int = Field(description="Forward window in trading sessions")
+    sample_size: int = Field(description="How many times the signal fired with a full forward window")
+    effective_sample: int = Field(
+        description="Independent observations (sample_size / horizon) — forward windows overlap"
+    )
+    hit_rate_pct: float = Field(description="Share of events followed by a rise")
+    baseline_hit_rate_pct: float = Field(description="Same share over ALL days of the period")
+    edge_pp: float = Field(description="hit_rate minus baseline, in percentage points")
+    mean_return_pct: float
+    median_return_pct: float
+    baseline_mean_return_pct: float = Field(description="Mean forward return over all days")
+    excess_return_pct: float = Field(description="mean_return minus baseline — the headline number")
+    worst_return_pct: float
+    best_return_pct: float
+    t_stat: float | None = Field(default=None, description="On the effective sample; |t|>=2 counts")
+    reliable: bool = Field(description="sample_size >= minimum AND |t_stat| >= 2")
+    reading: str = Field(description="One-line reading in Polish, including 'worked in reverse'")
+
+
+class BacktestSignal(_Base):
+    key: str
+    note: str
+    direction: str = Field(description="bullish | bearish — what the textbook claims")
+    occurrences: int
+    sessions_since_last: int | None = None
+    horizons: list[BacktestHorizon] = []
+
+
+class BacktestActiveSignal(_Base):
+    key: str
+    note: str
+    direction: str
+    sessions_ago: int
+    reliable_on_any_horizon: bool
+    strongest: dict[str, Any] = Field(
+        default_factory=dict, description="Horizon with the largest measured edge"
+    )
+
+
+class BacktestPeriod(_Base):
+    from_: str | None = Field(default=None, alias="from")
+    to: str | None = None
+    sessions: int | None = None
+    years: float | None = None
+
+
+class BacktestResponse(_Base):
+    ticker: str
+    is_backtested: bool | None = Field(
+        default=None, description="True — unlike speculator projections, these numbers are measured"
+    )
+    period: BacktestPeriod | None = None
+    horizons_days: list[int] = []
+    min_sample_for_verdict: int | None = None
+    signals: list[BacktestSignal] = []
+    active_signals: list[BacktestActiveSignal] = Field(
+        default=[], description="Signals that fired in the last few sessions, with their track record"
+    )
+    reliable_signals: list[dict[str, Any]] = Field(
+        default=[], description="Signal x horizon combinations that passed the significance test, strongest first"
+    )
+    data_quality: DataQuality | None = None
+    caveats: list[str] = []
     error: str | None = None
 
 
