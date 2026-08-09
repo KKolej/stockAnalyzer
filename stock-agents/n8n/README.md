@@ -136,11 +136,23 @@ Przepływ: `Email Trigger (IMAP)` → `Parse request` → `Loop over mails` (bat
 Pętla jest po to, żeby dwa maile, które przyszły między odpytaniami skrzynki, dostały
 **dwie osobne analizy i dwie odpowiedzi**, a nie jedną wspólną.
 
-**Zanim ruszy — trzeba dodać credential IMAP** (n8n → Credentials → *IMAP*): `imap.gmail.com`,
-port 993, SSL/TLS, użytkownik `b.kolej.helper@gmail.com`, hasło = **App Password** Google
-(zwykłe hasło nie przejdzie przy 2FA). Potem wybierz go w węźle `Email Trigger (IMAP)` i
-włącz workflow — trigger działa tylko na aktywnym workflow. Credential SMTP jest ten sam,
-co w przeglądzie dziennym, więc podepnie się sam.
+**Credentiale są już ustawione na Mikrusie** (`IMAP account` + `SMTP account`) i workflow
+jest aktywny. IMAP dostał **to samo App Password co SMTP** — jedno hasło aplikacji Google
+obsługuje oba protokoły, więc nie ma potrzeby generować drugiego. Gdyby trzeba było odtworzyć:
+`imap.gmail.com`, port 993, SSL/TLS, `b.kolej.helper@gmail.com`, hasło = App Password
+(zwykłe hasło nie przejdzie przy 2FA). Trigger działa **tylko na aktywnym workflow**.
+
+Filtr `customEmailConfig` w węźle triggera to nie kosmetyka:
+
+```
+["UNSEEN", ["SUBJECT", "check"], ["FROM", "b.kolej@gmail.com"]]
+```
+
+Węzeł **oznacza jako przeczytane wszystko, co pobierze**, a w skrzynce leżało 196
+nieprzeczytanych maili — bez tego filtra pierwszy przebieg oznaczyłby je wszystkie.
+`FROM` musi być zgodne z `ALLOWED_SENDERS` w `Parse request`: whitelist w kodzie decyduje,
+co dostanie odpowiedź, a filtr IMAP decyduje, co w ogóle zostanie pobrane. Rozjazd = mail
+przepuszczony przez jedno, odrzucony po cichu przez drugie.
 
 Filtr w `Parse request` jest celowo ostry — do tej skrzynki może napisać każdy, a każdy
 przepuszczony mail kosztuje jedno wywołanie Claude Code:

@@ -6,7 +6,7 @@
         "postProcessAction": "read",
         "format": "resolved",
         "options": {
-          "customEmailConfig": "[\"UNSEEN\"]",
+          "customEmailConfig": "[\"UNSEEN\", [\"SUBJECT\", \"check\"], [\"FROM\", \"b.kolej@gmail.com\"]]",
           "forceReconnect": 60
         }
       },
@@ -17,7 +17,15 @@
       "position": [
         -200,
         300
-      ]
+      ],
+      "notes": "Filtr po stronie serwera IMAP: UNSEEN + temat zawiera \"check\" + nadawca z whitelisty. Zmieniasz ALLOWED_SENDERS w \"Parse request\" -> zmień też FROM w customEmailConfig, inaczej mail nie zostanie w ogóle pobrany.",
+      "notesInFlow": true,
+      "credentials": {
+        "imap": {
+          "id": "evgJf5w6kbDYOWHX",
+          "name": "IMAP account"
+        }
+      }
     },
     {
       "parameters": {
