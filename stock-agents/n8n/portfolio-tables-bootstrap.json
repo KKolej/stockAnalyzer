@@ -1,5 +1,5 @@
 {
-  "name": "Portfel — utworzenie tabel (jednorazowo)",
+  "name": "Portfel — utworzenie tabeli (jednorazowo)",
   "nodes": [
     {
       "parameters": {},
@@ -7,7 +7,10 @@
       "name": "Uruchom ręcznie",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [-200, 300]
+      "position": [
+        -200,
+        300
+      ]
     },
     {
       "parameters": {
@@ -16,63 +19,91 @@
         "tableName": "portfel",
         "columns": {
           "column": [
-            { "name": "ticker", "type": "string" },
-            { "name": "szt", "type": "number" },
-            { "name": "cena_kupna", "type": "number" },
-            { "name": "data", "type": "string" },
-            { "name": "notatka", "type": "string" }
+            {
+              "name": "ticker",
+              "type": "string"
+            },
+            {
+              "name": "szt",
+              "type": "number"
+            },
+            {
+              "name": "cena_kupna",
+              "type": "number"
+            },
+            {
+              "name": "data",
+              "type": "string"
+            },
+            {
+              "name": "notatka",
+              "type": "string"
+            }
           ]
         },
-        "options": { "createIfNotExists": true }
+        "options": {
+          "createIfNotExists": true
+        }
       },
       "id": "mk-portfel",
       "name": "Tabela portfel",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
-      "position": [20, 300],
-      "notes": "ticker = skrót jak w przeglądzie (PKO, CDR, TSLA.US). cena_kupna = średnia cena zakupu jednej sztuki. data = YYYY-MM-DD."
-    },
-    {
-      "parameters": {
-        "resource": "table",
-        "operation": "create",
-        "tableName": "plan",
-        "columns": {
-          "column": [
-            { "name": "sekcja", "type": "string" },
-            { "name": "tekst", "type": "string" }
-          ]
-        },
-        "options": { "createIfNotExists": true }
-      },
-      "id": "mk-plan",
-      "name": "Tabela plan",
-      "type": "n8n-nodes-base.dataTable",
-      "typeVersion": 1,
-      "position": [240, 300],
-      "notes": "Jeden wiersz = jedna myśl. sekcja to etykieta (np. horyzont, zasady, obserwuję), tekst to treść własnymi słowami."
+      "position": [
+        20,
+        300
+      ],
+      "notes": "ticker = skrót jak w przeglądzie (PKO, CDR, TSLA.US). cena_kupna = średnia cena jednej sztuki. data = YYYY-MM-DD. notatka = PO CO kupujesz — to jedyne miejsce na Twój plan, model dostaje ją przy pozycji."
     },
     {
       "parameters": {
         "resource": "row",
         "operation": "get",
-        "dataTableId": { "__rl": true, "mode": "name", "value": "portfel" },
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "portfel"
+        },
         "returnAll": true
       },
       "id": "read-test",
       "name": "Test odczytu",
       "type": "n8n-nodes-base.dataTable",
       "typeVersion": 1,
-      "position": [460, 300],
+      "position": [
+        460,
+        300
+      ],
       "alwaysOutputData": true
     }
   ],
   "connections": {
-    "Uruchom ręcznie": { "main": [[{ "node": "Tabela portfel", "type": "main", "index": 0 }]] },
-    "Tabela portfel": { "main": [[{ "node": "Tabela plan", "type": "main", "index": 0 }]] },
-    "Tabela plan": { "main": [[{ "node": "Test odczytu", "type": "main", "index": 0 }]] }
+    "Uruchom ręcznie": {
+      "main": [
+        [
+          {
+            "node": "Tabela portfel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tabela portfel": {
+      "main": [
+        [
+          {
+            "node": "Test odczytu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" },
+  "settings": {
+    "executionOrder": "v1"
+  },
   "pinData": {},
   "id": "PortfolioTablesBootstrap",
   "active": false

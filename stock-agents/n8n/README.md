@@ -52,25 +52,32 @@ Działa w trybie **map-reduce**, nie jednym wielkim promptem:
 (`🟢: PKO, CDR`), a treść wkleja `Assemble e-mail` dokładnie tak, jak napisał ją etap
 per-spółkę. Wcześniej model przepisywał 20 linii i po drodze gubił cyfry.
 
-### Portfel i plan (sekcja „Twój portfel")
+### Portfel (sekcja „Twój portfel")
 
-Przegląd komentuje **Twoje pozycje**, nie tylko spółki z listy. Dane trzymają dwie
-**Data Tables** w n8n (menu boczne → *Data tables*) — edytujesz je w UI jak arkusz,
-bez dotykania workflow:
+Przegląd komentuje **Twoje pozycje**, nie tylko spółki z listy. Dane trzymają się w
+**jednej** tabeli — n8n → *Data tables* → `portfel` (edytujesz w UI jak arkusz, bez
+dotykania workflow):
 
-| Tabela | Kolumny | Do czego |
-|---|---|---|
-| `portfel` | `ticker`, `szt` (number), `cena_kupna` (number), `data`, `notatka` | jedna pozycja = jeden wiersz; `cena_kupna` to średnia cena **jednej sztuki** |
-| `plan` | `sekcja`, `tekst` | jedna myśl = jeden wiersz (horyzont, zasady, na co czekasz) |
+| Kolumna | Co wpisać |
+|---|---|
+| `ticker` | skrót jak w przeglądzie: `PKO`, `CDR`, `TSLA.US` |
+| `szt` (number) | liczba sztuk |
+| `cena_kupna` (number) | średnia cena **jednej sztuki** |
+| `data` | `YYYY-MM-DD` |
+| `notatka` | **po co kupujesz** — to jedyne miejsce na Twój plan |
 
-Tabele zakłada workflow `portfolio-tables-bootstrap.json` (import → **Execute workflow**;
+`notatka` nie jest ozdobnikiem: trafia do modelu przy pozycji jako zapis Twojej intencji
+z dnia zakupu, a prompt każe wprost sprawdzić, **czy ten powód dalej obowiązuje**. Osobna
+tabela na strategię istniała przez chwilę i została usunięta — dwa miejsca na to samo
+rozjeżdżają się w tydzień.
+
+Tabelę zakłada `portfolio-tables-bootstrap.json` (import → **Execute workflow**;
 `createIfNotExists` sprawia, że powtórne uruchomienie niczego nie kasuje). Węzeł Data Table
 **nie działa przez `n8n execute` z CLI** — moduł data-tables ładuje się tylko w procesie
 serwera, więc uruchamiaj z UI albo webhookiem.
 
-Przepływ: `Portfolio (Data Table)` → `Plan (Data Table)` → `Fetch data` (dokłada tickery
-z portfela do listy, żeby pozycja spoza WIG20 też dostała pełną analizę) → … →
-`Portfolio advice` → `Assemble e-mail`.
+Przepływ: `Portfolio (Data Table)` → `Fetch data` (dokłada tickery z portfela do listy, żeby
+pozycja spoza WIG20 też dostała pełną analizę) → … → `Portfolio advice` → `Assemble e-mail`.
 
 **Podział pracy jest tu ostry i celowy:**
 
@@ -78,8 +85,8 @@ z portfela do listy, żeby pozycja spoza WIG20 też dostała pełną analizę) �
   i ma zakaz ich przeliczania (zasada 1 w prompcie portfela) — ta sama reguła co przy
   licznikach koszyków.
 - **Model ocenia**: `DOKUP / TRZYMAJ / REDUKUJ / SPRZEDAJ / OBSERWUJ` + jedno zdanie na
-  pozycję, plus akapit „wobec Twojego planu". Decyzja o **pozycji** to nie to samo co ocena
-  spółki — prompt każe brać pod uwagę wielkość pozycji, cenę zakupu i Twój plan.
+  pozycję, plus akapit „całość portfela". Decyzja o **pozycji** to nie to samo co ocena
+  spółki — prompt każe brać pod uwagę wielkość pozycji, cenę zakupu i notatkę.
 
 Rzeczy, o które łatwo się potknąć przy zmianach:
 
@@ -91,7 +98,7 @@ Rzeczy, o które łatwo się potknąć przy zmianach:
 - **Pusty portfel nie może zabić maila.** `Portfolio advice` woła proxy z węzła Code (nie
   osobnym HTTP), bo węzeł Code zwracający zero itemów zatrzymałby gałąź i mail by nie
   wyszedł. Brak pozycji = brak wywołania modelu i brak sekcji, reszta przeglądu bez zmian.
-- Węzły Data Table mają `alwaysOutputData` + `onError: continueRegularOutput` — brakująca
+- Węzeł Data Table ma `alwaysOutputData` + `onError: continueRegularOutput` — brakująca
   albo pusta tabela nie wywraca przeglądu.
 - Pozycja bez kursu (literówka w tickerze, wycofana spółka) dostaje „brak aktualnego kursu"
   i wypada z sum, zamiast liczyć się jako zero.
