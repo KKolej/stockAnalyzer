@@ -66,6 +66,14 @@ dotykania workflow):
 | `data` | `YYYY-MM-DD` |
 | `notatka` | **po co kupujesz** — to jedyne miejsce na Twój plan |
 
+**Ta sama spółka może mieć wiele wierszy.** Dokupując, dopisujesz kolejny wiersz z własną
+ceną, datą i notatką — nie przeliczasz niczego ręcznie. Kod skleja je **po tickerze** w jedną
+pozycję: łączna liczba sztuk, średnia cena ważona wolumenem, jeden udział w portfelu i
+**jedna porada na spółkę** (prompt zabrania sprzecznych działań dla transz tego samego
+pakietu). Ceny wejścia transz nie giną — mail rozpisuje je pod pozycją z osobnym wynikiem
+każdej, bo to one pokazują, która część pakietu jest pod wodą. Działa dla dowolnej liczby
+transz, nie tylko dwóch.
+
 `notatka` nie jest ozdobnikiem: trafia do modelu przy pozycji jako zapis Twojej intencji
 z dnia zakupu, a prompt każe wprost sprawdzić, **czy ten powód dalej obowiązuje**. Osobna
 tabela na strategię istniała przez chwilę i została usunięta — dwa miejsca na to samo
