@@ -101,7 +101,13 @@ inny wycinek analizy (techniczna, fundamentalna, wycena, sentyment itd.) i wysta
 - **DuPont**: dźwignia = aktywa/kapitał (z bilansu), NIE `ROE/(marża×rotacja)` (dawało <1).
 - **Magic Formula** wyklucza `Financial Services` i `Utilities` (Greenblatt).
 - Reddit zwraca 403 (blokuje scraping) — znane, sentyment leci z pozostałych źródeł.
-- **XTB nie ma już API** — `ws.xtb.com/demo` zwraca 404 (wyłączone 14.03.2025). NIE wpinać XTB.
+- **XTB: padł WebSocket, ale socket xAPI żyje** (sprawdzone 09.08.2026). `ws.xtb.com/demo|real`
+  dalej zwraca 404 — i to na tej podstawie uznaliśmy kiedyś, że „XTB nie ma API". To był
+  błędny wniosek: **`xapi.xtb.com:5124` (demo) i `:5112` (real) stoją**, TLS kończy handshake
+  ważnym certyfikatem `*.xtb.com` (Sectigo, `Verify return code: 0`). To inny transport —
+  JSON po gołym sockecie TLS, nie WebSocket. `ping` bez sesji nie odpowiada, więc **czy
+  `login` przechodzi, wie tylko ktoś z danymi konta** — niesprawdzone. Uwaga przy wpinaniu:
+  xAPI **nie ma zakresu read-only**, te same dane logowania pozwalają składać zlecenia.
 - **Broker = Alpaca** (zaimplementowany, `/broker/*`): darmowe, REST, paper/demo, ale tylko rynki US.
   Domyślnie paper (`ALPACA_PAPER=1`). Dla GPW z egzekucją alternatywą byłby Interactive Brokers.
 - `docker exec python` ≠ venv aplikacji — apka działa przez `poetry run` (.venv).
