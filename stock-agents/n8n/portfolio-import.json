@@ -1,0 +1,269 @@
+{
+  "name": "Portfel — import pozycji (webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "portfel-import",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "hook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        300
+      ],
+      "webhookId": "portfel-import",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PORTFEL_IMPORT_TOKEN",
+          "name": "Portfel import token"
+        }
+      },
+      "notes": "POST {\"pozycje\":[{ticker,szt,cena_kupna,data,notatka?}]}. Nagłówek X-Portfel-Token.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "portfel"
+        },
+        "returnAll": true
+      },
+      "id": "read",
+      "name": "Read current",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput",
+      "notes": "Czyta tabelę PRZED czyszczeniem — stąd biorą się notatki do zachowania.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Turns the posted positions into the rows that will replace the `portfel` table.\n//\n// Two rules decide the shape of this node:\n//   1. NOTATKI SĄ ŚWIĘTE. The CSV from the broker knows quantities and prices; it does not\n//      know why you bought. Notes are read from the current table and re-attached by\n//      ticker, so an import never silently erases the only human input in the system.\n//   2. A BROKEN IMPORT MUST NOT WIPE THE PORTFOLIO. Zero valid rows throws instead of\n//      clearing the table — a mis-parsed CSV would otherwise look exactly like \"I sold\n//      everything\". Selling everything is expressed explicitly with force=true.\nconst body = $('Webhook').first().json.body || {};\nconst przyslane = Array.isArray(body.pozycje) ? body.pozycje : [];\nconst force = body.force === true || body.force === 'true';\n\nlet biezace = [];\ntry { biezace = $('Read current').all().map((i) => i.json).filter((w) => w && w.ticker); } catch (e) { biezace = []; }\nconst notatki = {};\nfor (const w of biezace) { notatki[String(w.ticker).toUpperCase()] = String(w.notatka || ''); }\n\nconst rows = [];\nconst odrzucone = [];\nfor (const p of przyslane) {\n  const ticker = String((p && p.ticker) || '').trim().toUpperCase();\n  const szt = Number(p && p.szt);\n  const cena = Number(p && p.cena_kupna);\n  if (!ticker || !Number.isFinite(szt) || szt <= 0 || !Number.isFinite(cena) || cena <= 0) {\n    odrzucone.push(JSON.stringify(p));\n    continue;\n  }\n  // A note sent explicitly wins; otherwise the one already in the table survives.\n  const notatka = String((p && p.notatka) || '').trim() || notatki[ticker] || '';\n  rows.push({ ticker, szt, cena_kupna: cena, data: String((p && p.data) || '').trim(), notatka });\n}\n\nif (!rows.length && !force) {\n  throw new Error(\n    `Zero poprawnych pozycji w żądaniu (odrzucone: ${odrzucone.length}). Tabela NIE została ruszona. ` +\n    'Jeśli naprawdę chcesz wyczyścić portfel, wyślij {\"pozycje\": [], \"force\": true}.',\n  );\n}\n\nconst zachowane = rows.filter((r) => r.notatka && notatki[r.ticker] === r.notatka).map((r) => r.ticker);\nconst nowe = rows.filter((r) => !(r.ticker in notatki)).map((r) => r.ticker);\nconst zniknely = Object.keys(notatki).filter((t) => !rows.some((r) => r.ticker === t));\n\nreturn [{ json: { rows, podsumowanie: { wierszy: rows.length, odrzuconych: odrzucone.length, odrzucone, zachowane_notatki: zachowane, nowe_pozycje: nowe, znikniete_pozycje: zniknely } } }];\n"
+      },
+      "id": "prep",
+      "name": "Prepare rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "notes": "Zero poprawnych wierszy = wyjątek, tabela nietknięta. Notatki doklejane po tickerze.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "resource": "table",
+        "operation": "clear",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "portfel"
+        }
+      },
+      "id": "clear",
+      "name": "Clear table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        440,
+        300
+      ],
+      "notes": "Zamiana całej zawartości: sprzedana pozycja ma zniknąć, a nie zostać jako duch."
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item per row — the insert node writes one row per input item.\n// Rows come from `Prepare rows`, not from $json: the upstream node here is\n// `Clear table`, whose output is its own {success: ...} report.\nreturn ($('Prepare rows').first().json.rows || []).map((r) => ({ json: r }));"
+      },
+      "id": "expand",
+      "name": "Expand rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ma-wiersze",
+              "leftValue": "={{ $('Prepare rows').first().json.rows.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "czy",
+      "name": "Are there rows?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "notes": "Świadome wyczyszczenie portfela (force) omija wstawianie i i tak dostaje odpowiedź — bez tego webhook zwracał 500 mimo poprawnie wykonanej pracy.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "portfel"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": null,
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "id": "ins",
+      "name": "Insert rows",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Response for the caller: what landed and which notes survived.\nconst p = $('Prepare rows').first().json.podsumowanie;\nreturn [{ json: { ok: true, ...p } }];"
+      },
+      "id": "resp",
+      "name": "Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Read current",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read current": {
+      "main": [
+        [
+          {
+            "node": "Prepare rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare rows": {
+      "main": [
+        [
+          {
+            "node": "Clear table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear table": {
+      "main": [
+        [
+          {
+            "node": "Are there rows?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Are there rows?": {
+      "main": [
+        [
+          {
+            "node": "Expand rows",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expand rows": {
+      "main": [
+        [
+          {
+            "node": "Insert rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert rows": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "id": "PortfolioImport",
+  "active": false
+}

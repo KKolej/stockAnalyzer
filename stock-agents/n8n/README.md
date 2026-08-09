@@ -71,6 +71,33 @@ z dnia zakupu, a prompt każe wprost sprawdzić, **czy ten powód dalej obowiąz
 tabela na strategię istniała przez chwilę i została usunięta — dwa miejsca na to samo
 rozjeżdżają się w tydzień.
 
+**Wgrywanie z CSV zamiast wpisywania ręcznie.** `portfolio-import.json` wystawia webhook
+`POST /webhook/portfel-import` (nagłówek `X-Portfel-Token`, credential „Portfel import token"),
+a `scripts/portfolio_from_csv.py` parsuje eksport z platformy brokera i go tam wysyła:
+
+```bash
+python3 scripts/portfolio_from_csv.py pozycje.csv          # podgląd, nic nie wysyła
+PORTFEL_IMPORT_TOKEN=... python3 scripts/portfolio_from_csv.py pozycje.csv --send
+```
+
+Import **zastępuje całą zawartość** tabeli (sprzedana pozycja ma zniknąć, a nie zostać
+duchem), ale trzyma się trzech zasad:
+
+- **Notatki przeżywają.** Webhook czyta tabelę PRZED czyszczeniem i dokleja notatki
+  z powrotem po tickerze. CSV wie ile i po ile, nie wie po co — to jedyna rzecz, której
+  automat nie odtworzy.
+- **Zepsuty CSV nie czyści portfela.** Zero poprawnych wierszy = wyjątek i tabela
+  nietknięta; źle sparsowany plik wygląda przecież identycznie jak „sprzedałem wszystko".
+  Świadome wyczyszczenie to jawne `{"pozycje": [], "force": true}`.
+- **Transze się sumują.** Trzy zakupy tej samej spółki dają jeden wiersz ze **średnią
+  ceną ważoną wolumenem** i datą pierwszego zakupu. Pozycje krótkie/sprzedaże są pomijane
+  z komunikatem — model portfela zakłada pozycje długie.
+
+Parser nie zakłada z góry formatu: wykrywa separator (`;`/`,`), kodowanie (UTF-8/CP1250),
+przecinek dziesiętny i dopasowuje nagłówki po nazwach PL i EN. Nierozpoznane kolumny =
+komunikat z listą tego, co znalazł, zamiast cichego zgadywania. Sufiks `.PL` jest ucinany
+(`CDR.PL` → `CDR`), `.US` zostaje.
+
 Tabelę zakłada `portfolio-tables-bootstrap.json` (import → **Execute workflow**;
 `createIfNotExists` sprawia, że powtórne uruchomienie niczego nie kasuje). Węzeł Data Table
 **nie działa przez `n8n execute` z CLI** — moduł data-tables ładuje się tylko w procesie
