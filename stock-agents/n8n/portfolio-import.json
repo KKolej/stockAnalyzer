@@ -29,6 +29,67 @@
     },
     {
       "parameters": {
+        "httpMethod": "GET",
+        "path": "portfel-stan",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "hook-get",
+      "name": "Webhook stan",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        520
+      ],
+      "webhookId": "portfel-stan",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PORTFEL_IMPORT_TOKEN",
+          "name": "Portfel import token"
+        }
+      },
+      "notes": "GET — zwraca aktualną zawartość tabeli. Edytor pozycji czyta stan stąd, zamiast zaglądać do bazy n8n.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "portfel"
+        },
+        "returnAll": true
+      },
+      "id": "readonly",
+      "name": "Read for view",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        0,
+        520
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Bez wierszy tabela zwraca pusty item — odpowiedź ma być pustą listą, nie {}.\nconst rows = $input.all().map((i) => i.json).filter((w) => w && w.ticker);\nreturn [{ json: { pozycje: rows, ile: rows.length } }];"
+      },
+      "id": "view",
+      "name": "Stan portfela",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        520
+      ]
+    },
+    {
+      "parameters": {
         "resource": "row",
         "operation": "get",
         "dataTableId": {
@@ -175,6 +236,28 @@
     }
   ],
   "connections": {
+    "Webhook stan": {
+      "main": [
+        [
+          {
+            "node": "Read for view",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read for view": {
+      "main": [
+        [
+          {
+            "node": "Stan portfela",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Webhook": {
       "main": [
         [
