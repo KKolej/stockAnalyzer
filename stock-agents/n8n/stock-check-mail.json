@@ -1,0 +1,210 @@
+{
+  "name": "Stock Analysis — check <TICKER> mailem (Claude Code)",
+  "nodes": [
+    {
+      "parameters": {
+        "postProcessAction": "read",
+        "format": "resolved",
+        "options": {
+          "customEmailConfig": "[\"UNSEEN\"]",
+          "forceReconnect": 60
+        }
+      },
+      "id": "imap",
+      "name": "Email Trigger (IMAP)",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// IMAP inbox -> analysis request. Accepts only mails whose subject starts with\n// \"check\" (any case), e.g. \"check CDR\" or \"check PKO PEO — co przed wynikami?\".\n// The filter is deliberately strict: this mailbox is reachable by anyone and every\n// accepted mail spends one Claude Code call.\nconst ALLOWED_SENDERS = ['b.kolej@gmail.com'];   // edit here; empty array = anyone\nconst MAX_TICKERS = 3;\nconst MAX_BODY_CHARS = 1500;\n\nconst ZNANE = ['PKO','PEO','PKN','PZU','KGHM','KGH','DNP','ALE','CDR','LPP','EBP','SPL','PGE',\n  'CPS','OPL','KTY','MBK','BDX','PCO','KRU','ALR','ZAB','JSW','CCC','EUR','GTC','TPE','ENG'];\n\n// Santander Bank Polska to od 28.04.2026 Erste Bank Polska (skrót EBP) — SPL.WA zwraca\n// w yfinance 404. Stary skrót zostaje rozpoznawany, ale pytamy już o nowy.\nconst PRZEMIANOWANE = { SPL: 'EBP' };\n\n// \"ALE\" is both Allegro's ticker and a Polish conjunction, \"EUR\" a currency code.\nconst DWUZNACZNE = ['ALE', 'EUR'];\nconst WZOR = /\\b[A-Z][A-Z0-9]{1,5}(?:\\.US)?\\b/g;\n\n// The IMAP node ships different shapes depending on `format` (resolved = mailparser\n// objects, simple = flat strings), so every field is read defensively.\nfunction adres(pole) {\n  if (!pole) { return ''; }\n  if (Array.isArray(pole.value) && pole.value[0]) { return String(pole.value[0].address || ''); }\n  const s = String(pole.text || pole.address || pole || '');\n  const m = s.match(/<([^>]+)>/);\n  return (m ? m[1] : s).trim();\n}\n\nfunction tekst(mail) {\n  const raw = String(mail.text || mail.textPlain || '');\n  if (raw) { return raw; }\n  return String(mail.textAsHtml || mail.html || mail.textHtml || '')\n    .replace(/<br\\s*\\/?>/gi, '\\n')\n    .replace(/<[^>]+>/g, ' ');\n}\n\n// Quoted history and signatures only add tokens and confuse the model.\nfunction bezCytatow(body) {\n  const out = [];\n  for (const l of body.split('\\n')) {\n    if (/^\\s*>/.test(l)) { continue; }\n    if (/^\\s*--\\s*$/.test(l)) { break; }\n    if (/^\\s*(On .+ wrote:|W dniu .+ napisał)/i.test(l)) { break; }\n    if (/^\\s*Od:\\s|^\\s*From:\\s/i.test(l)) { break; }\n    out.push(l);\n  }\n  return out.join('\\n').trim().slice(0, MAX_BODY_CHARS);\n}\n\nfunction rozpoznajTickery(text) {\n  const zOryginalu = text.match(WZOR) || [];\n  let tickers = [...new Set(zOryginalu.filter((t) => ZNANE.includes(t) || t.endsWith('.US')))];\n  // Only when nothing matches do we retry case-insensitively (\"check mbk\"),\n  // skipping the ambiguous tokens.\n  if (tickers.length === 0) {\n    const zWielkich = text.toUpperCase().match(WZOR) || [];\n    tickers = [...new Set(zWielkich.filter(\n      (t) => (ZNANE.includes(t) && !DWUZNACZNE.includes(t)) || t.endsWith('.US'),\n    ))];\n  }\n  return [...new Set(tickers.map((t) => PRZEMIANOWANE[t] || t))].slice(0, MAX_TICKERS);\n}\n\nconst zadania = [];\nconst odrzucone = [];\n\nfor (const item of $input.all()) {\n  const mail = item.json;\n  const temat = String(mail.subject || '').trim();\n  const od = adres(mail.from).toLowerCase();\n\n  // Loop guard: our own replies go out as \"Re: check ...\" and land back in this inbox.\n  if (/^\\s*(re|odp|fwd|fw)\\s*:/i.test(temat)) { odrzucone.push(`${temat} (odpowiedź)`); continue; }\n  if (!/^\\s*check\\b/i.test(temat)) { odrzucone.push(`${temat} (temat bez \"check\")`); continue; }\n  if (ALLOWED_SENDERS.length && !ALLOWED_SENDERS.map((a) => a.toLowerCase()).includes(od)) {\n    odrzucone.push(`${temat} (nadawca ${od})`);\n    continue;\n  }\n\n  const tematPoCheck = temat.replace(/^\\s*check\\b[\\s:—–-]*/i, '').trim();\n  const tresc = bezCytatow(tekst(mail));\n  // Tickers come from the subject first — the body may quote other companies.\n  const zTematu = rozpoznajTickery(tematPoCheck);\n  const tickers = zTematu.length ? zTematu : rozpoznajTickery(`${tematPoCheck}\\n${tresc}`);\n\n  if (!tickers.length) { odrzucone.push(`${temat} (brak tickera)`); continue; }\n\n  // Subject minus the recognised tickers is the question (\"check CDR przed Gamescomem?\").\n  // A bare \"check CDR\" gets the generic one — the body of such a mail is usually noise\n  // (\"dzieki\", a signature), and passing that alone as the question derails the answer.\n  const resztaTematu = tematPoCheck.replace(WZOR, ' ').replace(/[\\s:—–-]+/g, ' ').trim();\n  const pytanie = resztaTematu\n    ? [resztaTematu, tresc].filter(Boolean).join('\\n')\n    : `Co z ${tickers.join(', ')}? Daj pełny obraz.${tresc ? `\\n\\nOd nadawcy: ${tresc}` : ''}`;\n\n  zadania.push({\n    json: {\n      pytanie,\n      tickers,\n      toEmail: adres(mail.from),\n      temat,\n      messageId: String(mail.messageId || ''),\n    },\n  });\n}\n\nif (!zadania.length && odrzucone.length) {\n  console.log(`Pominięte maile: ${odrzucone.join(' | ')}`);\n}\nreturn zadania;\n"
+      },
+      "id": "parse",
+      "name": "Parse request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop",
+      "name": "Loop over mails",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Same fetcher as the chat workflow — only the pass-through fields differ (the reply\n// needs to know who asked). Keep the two in sync.\nconst pytanie = $json.pytanie;\nconst tickers = $json.tickers;\nconst base = 'http://stock-api:8000';\nconst H = this.helpers;\nfunction sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }\n\n// Sequential — concurrency breaks yfinance (401 \"Invalid Crumb\"). One retry with backoff.\nasync function g(path) {\n  for (let attempt = 0; attempt < 2; attempt++) {\n    try { return await H.httpRequest({ url: base + path, json: true, timeout: 60000 }); }\n    catch (e) {\n      if (attempt === 0) { await sleep(1200); continue; }\n      return { error: String((e && e.message) || e) };\n    }\n  }\n}\n\n// Sentiment is ~95% of the payload: one ticker ships 128 Google News items whose\n// base64 redirect URLs alone cost ~10k tokens. Stripping them plus a 90-day window\n// takes a ticker from ~33k to ~9k tokens — that is what blew the 1M limit.\nconst NEWS_WINDOW_DAYS = 90;\nconst MAX_MENTIONS_PER_SOURCE = 40;\n\nfunction trimSentiment(s) {\n  if (!s || !Array.isArray(s.results)) { return s; }\n  const cutoff = Date.now() - NEWS_WINDOW_DAYS * 86400000;\n  for (const src of s.results) {\n    const mentions = Array.isArray(src.mentions) ? src.mentions : [];\n    const dated = [];\n    const undated = [];\n    for (const m of mentions) {\n      const t = m.date ? Date.parse(m.date) : NaN;\n      if (Number.isNaN(t)) { undated.push(m); }        // Bankier ships no dates — keep them\n      else if (t >= cutoff) { dated.push([t, m]); }\n    }\n    // Mentions arrive UNSORTED (Google News mixes in items from 2004), so sorting\n    // before the cap is what makes the cap drop the oldest instead of random ones.\n    dated.sort((a, b) => b[0] - a[0]);\n    const kept = [...dated.map((p) => p[1]), ...undated].slice(0, MAX_MENTIONS_PER_SOURCE);\n    src.mentions = kept.map((m) => {\n      const { url, ...rest } = m;                       // URLs are never cited in the e-mail\n      return rest;\n    });\n    src.mentions_shown = src.mentions.length;           // total_mentions/overall_score untouched\n  }\n  return s;\n}\n\nconst macro = await g('/macro');\nconst spolki = [];\nfor (const t of tickers) {\n  spolki.push({\n    ticker: t,\n    technical: await g(`/technical/${t}`),\n    fundamental: await g(`/fundamental/${t}`),\n    dcf: await g(`/dcf/${t}`),\n    sentiment: trimSentiment(await g(`/sentiment/${t}`)),\n    speculator: await g(`/speculator/${t}`),\n  });\n}\n\nconst kiedy = new Date().toLocaleString('pl-PL', { timeZone: 'Europe/Warsaw' });\nconst prompt =\n  `PYTANIE UŻYTKOWNIKA: ${pytanie}\\n\\n` +\n  `Data/godzina wywołania: ${kiedy}.\\n` +\n  `Rozpoznane spółki: ${tickers.join(', ')}.\\n\\n` +\n  `KONTEKST MAKRO:\\n${JSON.stringify(macro, null, 1)}\\n\\n` +\n  `DANE SPÓŁEK:\\n${JSON.stringify(spolki, null, 1)}`;\n\n// Freshness is arithmetic over `quality` — computed here so the reply banner never\n// depends on the model getting it right.\nconst quality = spolki.map((s) => ({\n  ticker: s.ticker,\n  last_date: ((s.technical || {}).data_quality || {}).last_date || null,\n  is_stale: ((s.technical || {}).data_quality || {}).is_stale === true,\n  missing_sessions: ((s.technical || {}).data_quality || {}).missing_sessions || 0,\n  failed: Boolean((s.technical || {}).error),\n}));\n\nreturn [{\n  json: {\n    prompt,\n    pytanie,\n    tickers,\n    quality,\n    toEmail: $json.toEmail,\n    temat: $json.temat,\n    messageId: $json.messageId,\n  },\n}];\n"
+      },
+      "id": "zbierz",
+      "name": "Fetch data (sequential)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        460,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8787",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\"prompt\": $json.prompt, \"system\": \"Jesteś analitykiem giełdowym (GPW + rynki zagraniczne). Użytkownik zadaje PYTANIE,\\na Ty dostajesz do niego KOMPLET surowych danych z agentów (technical, fundamental, dcf,\\nsentiment, speculator) + makro. To dane od dostawcy, nie od analityka.\\n\\nODPOWIADAJ NA ZADANE PYTANIE. Nie recytuj wszystkich sekcji, jeśli pytanie jest wąskie —\\nale gdy pytanie jest ogólne („co z CDR?”), daj pełny obraz: werdykt, technika, fundamenty,\\nDCF, katalizatory, sentyment, makro, ryzyka.\\n\\nNA KOŃCU odpowiedzi, dla KAŻDEJ analizowanej spółki, dodaj blok „Ocena w horyzontach\\\"\\nw formacie `KOD | OCENA | uzasadnienie`, kody w kolejności 7D, 2T, 1M, 3M, 1R, LT\\n(OCENA: KUPUJ / TRZYMAJ / SPRZEDAJ / BRAK DANYCH). Pomijasz go tylko wtedy, gdy pytanie\\ndotyczy wyłącznie jednej konkretnej liczby („jaki jest RSI CDR?\\\").\\n\\n═══ ŻELAZNE ZASADY (łamanie ich = odpowiedź do kosza) ═══\\n\\n1. ZERO LICZB SPOZA DANYCH. Każda liczba musi pochodzić z JSON-a wejściowego. Nie licz\\n   z pamięci, nie uzupełniaj własną wiedzą o rynku, nie podawaj kursów „z głowy”.\\n\\n2. SUPERLATYWY TYLKO PO PRZELICZENIU. „Najwyższy”, „najmocniejszy”, „jedyny” wolno użyć\\n   dopiero po sprawdzeniu wszystkich pozycji w danych.\\n\\n3. ŚWIEŻOŚĆ. Podaj `technical.data_quality.last_date`; gdy `is_stale=true` lub\\n   `missing_sessions>=1`, napisz WYRAŹNIE, że analiza stoi na danych sprzed N sesji.\\n   Poza godzinami sesji pisz „na zamknięciu DD.MM”, nigdy „rośnie” w czasie teraźniejszym.\\n\\n4. OKNO METRYK RYZYKA. `risk.period_days` to zwykle ~89 dni — Sharpe/Sortino/CAGR/drawdown\\n   są z TEGO okna i annualizowane. Nigdy nie nazywaj tego „rokiem”.\\n\\n5. CENY DOCELOWE — ZAWSZE, W OBIE STRONY. Gdy jest wzorzec „Rekomendacje analityków”,\\n   podaj cel i porównaj z ceną także wtedy, gdy cel jest PONIŻEJ kursu. Podaj datę\\n   najnowszej rekomendacji z `note` — rekomendacja sprzed pół roku to nie konsensus.\\n\\n6. WZORCE BEZ TRIGGERA. Wzorzec z `requires_event` i `event_days_away: null` nie ma\\n   nadchodzącego zdarzenia — nie używaj go jako argumentu za ruchem.\\n\\n7. PROJEKCJE TO NIE PROGNOZY. `projections` mają `is_backtested: false` — `probability`\\n   to zgodność ważonych sygnałów, nie zweryfikowane prawdopodobieństwo. Pisz „model\\n   szacuje”, „historycznie”; nigdy „przewiduje” ani „wzrośnie o X%”.\\n\\n8. WIELKOŚĆ PRÓBY. Przy wzorcach sezonowych/dywidendowych podawaj `sample_size`\\n   („8/10 przypadków, próba 10 zdarzeń”). Samo „80% trafności” jest zakazane.\\n\\n9. SENTYMENT — TYLKO Z NAGŁÓWKÓW w `sentiment.results[].mentions`. Wypisz, które źródła\\n   padły (`error`). Gdy `total_mentions < 10` albo działa jedno źródło — oznacz sentyment\\n   jako niskiej wiarygodności. Nigdy nie dopisuj wydarzeń, których nie ma w tytułach.\\n\\n10. MAKRO. `wig20_pos_52w` i `sectors[].pos_52w` używaj tylko gdy `pos_52w_source` jest\\n    ustawione. Inflację opisuj z `cpi_change_pp`: dodatnie = przyspiesza, ujemne = zwalnia,\\n    „stabilna” tylko przy zmianie ok. 0.0 p.p.\\n\\n11. INSIDERZY. Nota podaje nazwisko i funkcję — rozróżniaj sprzedaż członka zarządu od\\n    pakietu funduszu. Formułuj jako zależność historyczną, nie pewny sygnał.\\n\\n12. DCF z `available:false` — napisz, że wycena jest nieadekwatna (np. ujemny FCF)\\n    i NIE podawaj fair value. Blok z polem `error` — odnotuj i pomiń.\\n\\n13. ROZDZIEL REJESTRY. Fakty (liczby z danych), Model (wzorce i projekcje z zastrzeżeniem\\n    o braku backtestu) i Interpretację (Twoja opinia) oznaczaj jawnie — nie mieszaj ich\\n    w jednym zdaniu. Podaj też argumenty przeciw własnej tezie.\\n\\n14. LISTA WZMIANEK TO WYCINEK. `mentions` zawiera tylko ostatnie 90 dni (ile sztuk —\\n    pole `mentions_shown`), a `total_mentions` i `overall_score` policzono na PEŁNYM\\n    zbiorze. Nie pisz, że wzmianek jest tyle, ile widzisz na liście.\\n\\n15. BRAK SPRZECZNOŚCI WEWNĘTRZNYCH. Przed wysłaniem sprawdź, czy ta sama liczba nie\\n    występuje u Ciebie w dwóch wersjach. Gdy dane wejściowe same sobie przeczą (np.\\n    `fundamental.quality.biznesradar_price` różni się od `price`), napisz o tym wprost.\\n\\n16. HORYZONTY — KAŻDY MA WŁASNE DANE. Ocenę na dany horyzont wolno oprzeć WYŁĄCZNIE\\n    na danych, które ten horyzont opisują:\\n    • 7 dni i 2 tygodnie — technika, wzorce Z TRIGGEREM (`event_days_away` różne od null\\n      i mieszczące się w horyzoncie), katalizatory z kalendarza.\\n    • miesiąc i 3 miesiące — sezonowość i wzorce zdarzeniowe (zawsze z `sample_size`),\\n      katalizatory w oknie, momentum, cel analityków (zawsze z datą).\\n    • rok — WYŁĄCZNIE fundamenty i wycena. ZAKAZ opierania oceny rocznej na RSI, MACD,\\n      Bollingerze czy pozycji 52W — wskaźniki techniczne nie niosą informacji o tym horyzoncie.\\n    • długi termin (3+ lata) — jakość biznesu: trwałość marż, ROIC, Piotroski, dźwignia,\\n      polityka dywidendowa, CAGR przychodów. Wycena tylko jako kontekst.\\n    Gdy dla horyzontu brakuje danych → `BRAK DANYCH` i jednozdaniowy powód. Zakaz\\n    wypełniania oceny „na wyczucie\\\".\\n\\nSPÓŁKI GAMINGOWE: gdy w katalizatorach są targi (Gamescom, TGS, PGA), zestaw je z nagłówkami\\nz sentymentu — czy rynek oczekuje KONKRETNYCH zapowiedzi. Jeśli wzorzec „Run-up przed targami”\\ntego nie potwierdza, podaj to jako kontrargument. Uwzględnij ryzyko „sell the news”.\\n\\nTo analiza danych, NIE rekomendacja inwestycyjna. Odpowiadaj po polsku i zwięźle.\", \"model\": \"opus\"} }}",
+        "options": {
+          "timeout": 900000
+        }
+      },
+      "id": "claude",
+      "name": "Claude Code (proxy)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        680,
+        400
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Renders the reply: HTML (primary) + plain-text fallback.\n// Styling mirrors the daily review mail — inline styles only, table layout, because\n// Gmail/Outlook drop <style> blocks and ignore flex/grid.\nconst res = $input.first().json;\nconst zapytanie = $('Fetch data (sequential)').first().json;\n\nconst TZ = 'Europe/Warsaw';\nconst now = new Date();\nconst dzis = now.toLocaleDateString('pl-PL', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' });\nconst godzina = now.toLocaleTimeString('pl-PL', { timeZone: TZ, hour: '2-digit', minute: '2-digit' });\n\nconst FONT = \"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif\";\nconst MONO = \"ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace\";\nconst INK = '#1c2430';\nconst MUTED = '#5d6b7a';\nconst RULE = '#e4e8ed';\n\nconst HORIZONS = [\n  { code: '7D', label: '7 dni' },\n  { code: '2T', label: '2 tyg.' },\n  { code: '1M', label: 'miesiąc' },\n  { code: '3M', label: '3 mies.' },\n  { code: '1R', label: 'rok' },\n  { code: 'LT', label: 'długi term.' },\n];\nconst VERDICTS = {\n  KUPUJ: { mark: '▲', fg: '#0b6b3a', bg: '#e9f7ef', line: '#bfe3cd' },\n  SPRZEDAJ: { mark: '▼', fg: '#a8201a', bg: '#fdecea', line: '#f3c7c3' },\n  TRZYMAJ: { mark: '●', fg: '#8a6100', bg: '#fff7e6', line: '#f0dda8' },\n  BRAK: { mark: '·', fg: '#7b8794', bg: '#f2f4f6', line: '#e0e4e9' },\n};\n\nconst blad = res.error || !res.response ? String(res.error || 'brak odpowiedzi z proxy') : '';\nconst odpowiedz = blad ? '' : String(res.response);\n\n// ── horizon block: \"7D | KUPUJ | uzasadnienie\" -> table ───────────────────────\n// Pulled out of the markdown so it renders as a table instead of pipe-separated text.\nconst oceny = [];\nconst linieOdpowiedzi = [];\nfor (const l of odpowiedz.split('\\n')) {\n  const m = l.match(/^[\\s*>-]*\\**\\s*(7D|2T|1M|3M|1R|LT)\\s*\\**\\s*\\|\\s*\\**\\s*(KUPUJ|TRZYMAJ|SPRZEDAJ|BRAK DANYCH|BRAK)\\s*\\**\\s*\\|?\\s*([\\s\\S]*)$/i);\n  if (m) {\n    oceny.push({\n      code: m[1].toUpperCase(),\n      verdict: m[2].toUpperCase().startsWith('BRAK') ? 'BRAK' : m[2].toUpperCase(),\n      why: m[3].replace(/\\**/g, '').trim(),\n    });\n    continue;\n  }\n  linieOdpowiedzi.push(l);\n}\n// Header of the dropped block (\"Ocena w horyzontach\") would dangle over an empty section.\nconst tresc = oceny.length\n  ? linieOdpowiedzi.join('\\n').replace(/(?:^|\\n)[^\\n]*ocena w horyzontach[^\\n]*(?=\\n|$)/gi, '')\n  : odpowiedz;\n\n// ── markdown -> HTML (headings, bold/italic/code, bullets, paragraphs) ────────\nfunction esc(t) {\n  return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n}\nfunction inline(t) {\n  return esc(t)\n    .replace(/`([^`]+)`/g, `<code style=\"font-family:${MONO};font-size:12px;background:#f1f3f6;border-radius:3px;padding:1px 4px;\">$1</code>`)\n    .replace(/\\*\\*([^*]+)\\*\\*/g, '<strong style=\"color:' + INK + ';\">$1</strong>')\n    .replace(/(^|[\\s(])\\*([^*\\n]+)\\*/g, '$1<em>$2</em>');\n}\nfunction md(text) {\n  const out = [];\n  let para = [];\n  let items = [];\n  const P = `margin:0 0 10px;font-size:14px;line-height:1.62;color:${INK};`;\n  const flushP = () => { if (para.length) { out.push(`<p style=\"${P}\">${para.join('<br>')}</p>`); para = []; } };\n  const flushL = () => {\n    if (items.length) {\n      out.push(`<ul style=\"margin:0 0 10px;padding-left:20px;\">${items.map((i) => `<li style=\"${P}margin:0 0 5px;\">${i}</li>`).join('')}</ul>`);\n      items = [];\n    }\n  };\n  for (const surowa of String(text || '').split('\\n')) {\n    const l = surowa.trim();\n    if (!l) { flushP(); flushL(); continue; }\n    // A free-form answer uses headings; the daily review never did, so this is extra here.\n    const h = l.match(/^(#{1,4})\\s+(.+?)\\s*#*$/);\n    if (h) {\n      flushP(); flushL();\n      const size = h[1].length <= 2 ? 16 : 14;\n      out.push(`<div style=\"margin:18px 0 8px;font-size:${size}px;font-weight:700;color:${INK};border-bottom:1px solid ${RULE};padding-bottom:5px;\">${inline(h[2])}</div>`);\n      continue;\n    }\n    if (/^([-*_])\\1{2,}$/.test(l)) { flushP(); flushL(); out.push(`<div style=\"height:1px;background:${RULE};margin:14px 0;\"></div>`); continue; }\n    const b = l.match(/^(?:[-*•·]|\\d+[.)])\\s+([\\s\\S]*)$/);\n    if (b) { flushP(); items.push(inline(b[1])); continue; }\n    flushL();\n    para.push(inline(l));\n  }\n  flushP(); flushL();\n  return out.join('') || `<p style=\"${P}\">—</p>`;\n}\n\n// ── freshness banner (arithmetic over `quality`, never the model) ─────────────\nconst quality = Array.isArray(zapytanie.quality) ? zapytanie.quality : [];\nconst plData = (d) => { const m = String(d).match(/^(\\d{4})-(\\d{2})-(\\d{2})/); return m ? `${m[3]}.${m[2]}.${m[1]}` : String(d); };\nconst daty = quality.map((q) => q.last_date).filter(Boolean).sort();\nconst sesja = daty.length ? plData(daty[daty.length - 1]) : null;\nconst nieswieze = quality\n  .filter((q) => q.is_stale || q.missing_sessions >= 1)\n  .map((q) => (q.missing_sessions ? `${q.ticker} (${q.missing_sessions})` : String(q.ticker)));\nconst bledy = quality.filter((q) => q.failed).map((q) => q.ticker);\n\nconst ostrzezenia = [];\nif (blad) { ostrzezenia.push(`Analiza nie powstała: ${blad}`); }\nif (nieswieze.length) { ostrzezenia.push(`Dane nieświeże: ${nieswieze.join(', ')}`); }\nif (bledy.length) { ostrzezenia.push(`Brak danych technicznych: ${bledy.join(', ')}`); }\n\n// ── HTML ──────────────────────────────────────────────────────────────────────\nconst tickery = (zapytanie.tickers || []).join(', ');\nconst H = [];\nH.push(`<div style=\"background:#f5f7f9;padding:20px 12px;font-family:${FONT};\">`);\nH.push(`<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:680px;margin:0 auto;background:#ffffff;border:1px solid ${RULE};border-radius:10px;overflow:hidden;\">`);\n\nH.push(`<tr><td style=\"background:#1c2430;padding:18px 22px;\">\n  <div style=\"font-size:17px;font-weight:700;color:#ffffff;\">Analiza na życzenie — ${esc(tickery || '?')}</div>\n  <div style=\"font-size:12px;color:#9fb0c0;margin-top:4px;\">${dzis}, godz. ${godzina}${sesja ? ` · ostatnia sesja ${sesja}` : ''}</div>\n</td></tr>`);\n\nH.push(`<tr><td style=\"padding:14px 22px;background:#fbfcfd;border-bottom:1px solid ${RULE};\">\n  <div style=\"font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:${MUTED};margin-bottom:4px;\">Twoje pytanie</div>\n  <div style=\"font-size:13px;line-height:1.55;color:${INK};\">${esc(zapytanie.pytanie || '').replace(/\\n/g, '<br>')}</div>\n</td></tr>`);\n\nif (ostrzezenia.length) {\n  H.push(`<tr><td style=\"padding:12px 22px;background:#fff7e6;border-bottom:1px solid #f0dda8;\">\n    <div style=\"font-size:13px;line-height:1.6;color:#8a6100;\">⚠️ ${ostrzezenia.map(esc).join('<br>⚠️ ')}</div>\n  </td></tr>`);\n}\n\nH.push(`<tr><td style=\"padding:20px 22px;\">${md(blad ? 'Spróbuj wysłać maila jeszcze raz — dane z agentów przyszły, ale etap LLM nie odpowiedział.' : tresc)}`);\n\nif (oceny.length) {\n  const wiersze = HORIZONS.map((h) => {\n    // A horizon the model skipped becomes an explicit \"brak danych\" row, never a gap.\n    const o = oceny.find((x) => x.code === h.code) || { verdict: 'BRAK', why: '' };\n    const v = VERDICTS[o.verdict] || VERDICTS.BRAK;\n    return `<tr>\n      <td style=\"padding:7px 10px;border-top:1px solid ${RULE};font-size:12px;color:${MUTED};white-space:nowrap;\">${h.label}</td>\n      <td style=\"padding:7px 10px;border-top:1px solid ${RULE};white-space:nowrap;\">\n        <span style=\"display:inline-block;padding:2px 8px;border-radius:11px;background:${v.bg};border:1px solid ${v.line};color:${v.fg};font-size:12px;font-weight:700;\">${v.mark} ${o.verdict === 'BRAK' ? 'brak danych' : o.verdict.toLowerCase()}</span>\n      </td>\n      <td style=\"padding:7px 10px;border-top:1px solid ${RULE};font-size:13px;line-height:1.5;color:${INK};\">${inline(o.why || '—')}</td>\n    </tr>`;\n  }).join('');\n  H.push(`<div style=\"margin:18px 0 8px;font-size:14px;font-weight:700;color:${INK};\">Ocena w horyzontach</div>\n    <table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border:1px solid ${RULE};border-radius:8px;border-collapse:separate;\">${wiersze}</table>`);\n}\n\nH.push(`</td></tr>`);\n\nH.push(`<tr><td style=\"padding:14px 22px;background:#fbfcfd;border-top:1px solid ${RULE};font-size:11px;line-height:1.6;color:${MUTED};\">\n  Odpowiedź na maila o temacie „${esc(zapytanie.temat || '')}\". Kolejne pytanie wyślij z tematem\n  <code style=\"font-family:${MONO};\">check &lt;TICKER&gt;</code> (np. <code style=\"font-family:${MONO};\">check CDR</code>),\n  treść maila może zawierać doprecyzowanie.<br>\n  To analiza danych, <strong>nie rekomendacja inwestycyjna</strong>.\n</td></tr>`);\n\nH.push('</table></div>');\n\n// ── plain text ────────────────────────────────────────────────────────────────\nconst T = [];\nT.push(`Analiza na życzenie — ${tickery} · ${dzis} ${godzina}${sesja ? ` · ostatnia sesja ${sesja}` : ''}`);\nT.push('');\nT.push(`Pytanie: ${zapytanie.pytanie}`);\nif (ostrzezenia.length) { T.push(''); ostrzezenia.forEach((o) => T.push(`! ${o}`)); }\nT.push('');\nT.push(blad ? 'Analiza nie powstała — spróbuj ponownie.' : tresc.trim());\nif (oceny.length) {\n  T.push('');\n  T.push('Ocena w horyzontach:');\n  HORIZONS.forEach((h) => {\n    const o = oceny.find((x) => x.code === h.code) || { verdict: 'BRAK', why: '' };\n    const ocena = o.verdict === 'BRAK' ? 'brak danych' : o.verdict.toLowerCase();\n    T.push(`  ${h.label.padEnd(12)} ${ocena}${o.why ? ` — ${o.why}` : ''}`);\n  });\n}\nT.push('');\nT.push('Kolejne pytanie: mail z tematem \"check <TICKER>\". To analiza danych, nie rekomendacja inwestycyjna.');\n\nreturn [{\n  json: {\n    toEmail: zapytanie.toEmail,\n    subject: `Re: ${zapytanie.temat}${blad ? ' — błąd' : ''} · ${dzis} ${godzina}`,\n    html: H.join(''),\n    text: T.join('\\n'),\n  },\n}];\n"
+      },
+      "id": "format",
+      "name": "Format reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "b.kolej.helper@gmail.com",
+        "toEmail": "={{ $json.toEmail }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "both",
+        "text": "={{ $json.text }}",
+        "options": {},
+        "html": "={{ $json.html }}"
+      },
+      "id": "email",
+      "name": "Send reply",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1120,
+        400
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "oCod4PkHItqwcI4T",
+          "name": "SMTP account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Email Trigger (IMAP)": {
+      "main": [
+        [
+          {
+            "node": "Parse request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse request": {
+      "main": [
+        [
+          {
+            "node": "Loop over mails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop over mails": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Fetch data (sequential)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch data (sequential)": {
+      "main": [
+        [
+          {
+            "node": "Claude Code (proxy)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Code (proxy)": {
+      "main": [
+        [
+          {
+            "node": "Format reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format reply": {
+      "main": [
+        [
+          {
+            "node": "Send reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send reply": {
+      "main": [
+        [
+          {
+            "node": "Loop over mails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "id": "StockAgentsCheckMail",
+  "active": false
+}

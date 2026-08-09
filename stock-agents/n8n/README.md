@@ -17,7 +17,7 @@ docker compose up -d --build
 
 | Droga | Czego wymaga | Używają jej |
 |---|---|---|
-| **Claude Code przez proxy** (subskrypcja, bez płatnego API) | `scripts/claude_proxy.py` uruchomiony **na hoście**, port 8787 | `wig20-daily.json`, `stock-analysis-claude-code.json` |
+| **Claude Code przez proxy** (subskrypcja, bez płatnego API) | `scripts/claude_proxy.py` uruchomiony **na hoście**, port 8787 | `wig20-daily.json`, `stock-analysis-claude-code.json`, `stock-check-mail.json` |
 | **Anthropic API** (płatny klucz) | credential `ANTHROPIC_API_KEY` w n8n | `stock-analysis-workflow.json` |
 
 Proxy startuje się na hoście (tam, gdzie zalogowany Claude Code), nie w kontenerze:
@@ -124,6 +124,46 @@ antyhalucynacyjnych, ten sam `trimSentiment()` i te same **oceny w horyzontach**
 (pomijane tylko wtedy, gdy pytanie dotyczy jednej konkretnej liczby).
 Przy zmianie reguł w jednym prompcie przenieś je do drugiego — inaczej czat i mail
 zaczną odpowiadać różnie na to samo pytanie.
+
+### `stock-check-mail.json` — pytanie mailem (`check <TICKER>`)
+To samo co czat, tylko wejściem i wyjściem jest **skrzynka pocztowa**: wysyłasz maila
+z tematem `check CDR`, n8n pobiera dane, pyta Claude Code i **odpowiada na adres nadawcy**.
+Temat może zawierać doprecyzowanie (`check CDR przed Gamescomem?`), a przy samym
+`check CDR` pytanie doprecyzowuje treść maila. Rozpoznaje do 3 spółek.
+
+Przepływ: `Email Trigger (IMAP)` → `Parse request` → `Loop over mails` (batch 1) →
+`Fetch data (sequential)` → `Claude Code (proxy)` → `Format reply` → `Send reply`.
+Pętla jest po to, żeby dwa maile, które przyszły między odpytaniami skrzynki, dostały
+**dwie osobne analizy i dwie odpowiedzi**, a nie jedną wspólną.
+
+**Zanim ruszy — trzeba dodać credential IMAP** (n8n → Credentials → *IMAP*): `imap.gmail.com`,
+port 993, SSL/TLS, użytkownik `b.kolej.helper@gmail.com`, hasło = **App Password** Google
+(zwykłe hasło nie przejdzie przy 2FA). Potem wybierz go w węźle `Email Trigger (IMAP)` i
+włącz workflow — trigger działa tylko na aktywnym workflow. Credential SMTP jest ten sam,
+co w przeglądzie dziennym, więc podepnie się sam.
+
+Filtr w `Parse request` jest celowo ostry — do tej skrzynki może napisać każdy, a każdy
+przepuszczony mail kosztuje jedno wywołanie Claude Code:
+
+- temat musi zaczynać się od `check` (dowolna wielkość liter),
+- nadawca musi być na liście `ALLOWED_SENDERS` (na starcie tylko `b.kolej@gmail.com`;
+  pusta tablica = każdy),
+- tematy zaczynające się od `Re:`/`Odp:`/`Fwd:` są odrzucane — **to zabezpieczenie przed
+  pętlą**, bo nasza własna odpowiedź wraca do tej samej skrzynki,
+- bez rozpoznanego tickera mail jest pomijany (powody lądują w logu wykonania, nie w mailu —
+  odpowiadanie na spam ujawniłoby, że skrzynka jest żywa).
+
+Odpowiedź ma ten sam układ co przegląd dzienny (ciemny nagłówek, cytat pytania, baner
+świeżości, treść, **tabela horyzontów**, stopka z zastrzeżeniem) i wychodzi jako HTML +
+`text/plain`. Blok `KOD | OCENA | uzasadnienie` z odpowiedzi modelu jest **wycinany z
+tekstu i renderowany jako tabela**; brakujący horyzont daje wiersz „brak danych".
+Baner świeżości liczy kod z `technical.data_quality`, nie model. Gdy proxy padnie, mail
+i tak wychodzi — z tematem `… — błąd` i powodem w banerze, żeby nie czekać na odpowiedź,
+która nigdy nie przyjdzie.
+
+> Prompt systemowy jest **kopią** promptu z `stock-analysis-claude-code.json`. Reguły
+> antyhalucynacyjne żyją teraz w **trzech** plikach (dzienny, czat, mail) — zmieniasz
+> w jednym, przenosisz do pozostałych.
 
 ### `stock-analysis-workflow.json` — AI Agent (płatne API)
 Endpointy podpięte jako narzędzia (tools) AI Agenta; agent sam decyduje, co wywołać.
