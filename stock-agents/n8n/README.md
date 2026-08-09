@@ -52,6 +52,50 @@ Działa w trybie **map-reduce**, nie jednym wielkim promptem:
 (`🟢: PKO, CDR`), a treść wkleja `Assemble e-mail` dokładnie tak, jak napisał ją etap
 per-spółkę. Wcześniej model przepisywał 20 linii i po drodze gubił cyfry.
 
+### Portfel i plan (sekcja „Twój portfel")
+
+Przegląd komentuje **Twoje pozycje**, nie tylko spółki z listy. Dane trzymają dwie
+**Data Tables** w n8n (menu boczne → *Data tables*) — edytujesz je w UI jak arkusz,
+bez dotykania workflow:
+
+| Tabela | Kolumny | Do czego |
+|---|---|---|
+| `portfel` | `ticker`, `szt` (number), `cena_kupna` (number), `data`, `notatka` | jedna pozycja = jeden wiersz; `cena_kupna` to średnia cena **jednej sztuki** |
+| `plan` | `sekcja`, `tekst` | jedna myśl = jeden wiersz (horyzont, zasady, na co czekasz) |
+
+Tabele zakłada workflow `portfolio-tables-bootstrap.json` (import → **Execute workflow**;
+`createIfNotExists` sprawia, że powtórne uruchomienie niczego nie kasuje). Węzeł Data Table
+**nie działa przez `n8n execute` z CLI** — moduł data-tables ładuje się tylko w procesie
+serwera, więc uruchamiaj z UI albo webhookiem.
+
+Przepływ: `Portfolio (Data Table)` → `Plan (Data Table)` → `Fetch data` (dokłada tickery
+z portfela do listy, żeby pozycja spoza WIG20 też dostała pełną analizę) → … →
+`Portfolio advice` → `Assemble e-mail`.
+
+**Podział pracy jest tu ostry i celowy:**
+
+- **Kod liczy** wartość, wynik zł i %, udziały, sumy. Model dostaje liczby gotowe
+  i ma zakaz ich przeliczania (zasada 1 w prompcie portfela) — ta sama reguła co przy
+  licznikach koszyków.
+- **Model ocenia**: `DOKUP / TRZYMAJ / REDUKUJ / SPRZEDAJ / OBSERWUJ` + jedno zdanie na
+  pozycję, plus akapit „wobec Twojego planu". Decyzja o **pozycji** to nie to samo co ocena
+  spółki — prompt każe brać pod uwagę wielkość pozycji, cenę zakupu i Twój plan.
+
+Rzeczy, o które łatwo się potknąć przy zmianach:
+
+- **Udziały liczone są w jednej bazie (PLN)** po kursie NBP z `/macro`. Wcześniejsza wersja
+  liczyła je per waluta i jedna pozycja USD wychodziła jako „100% portfela".
+- **Wynik jest w walucie notowania** — koszt przeliczany dzisiejszym kursem, więc zmiana
+  kursu waluty od dnia zakupu NIE wchodzi w wynik (nie znamy kursu z dnia zakupu). Mail
+  mówi to wprost pod tabelą; nie „popraw" tego bez dopisania rzeczywistych kursów zakupu.
+- **Pusty portfel nie może zabić maila.** `Portfolio advice` woła proxy z węzła Code (nie
+  osobnym HTTP), bo węzeł Code zwracający zero itemów zatrzymałby gałąź i mail by nie
+  wyszedł. Brak pozycji = brak wywołania modelu i brak sekcji, reszta przeglądu bez zmian.
+- Węzły Data Table mają `alwaysOutputData` + `onError: continueRegularOutput` — brakująca
+  albo pusta tabela nie wywraca przeglądu.
+- Pozycja bez kursu (literówka w tickerze, wycofana spółka) dostaje „brak aktualnego kursu"
+  i wypada z sum, zamiast liczyć się jako zero.
+
 ### Wygląd maila (`Assemble e-mail`)
 
 Mail wychodzi jako **HTML + `text/plain`** (`emailFormat: both`), temat zawiera bilans
@@ -189,6 +233,11 @@ Ręczny trigger, jeden ticker, jeden endpoint. Do sprawdzenia, czy n8n widzi API
 Menu (☰) → **Import from File** → wskaż plik JSON.
 **Workflowy żyją w bazie n8n, nie w repo** — po każdej zmianie pliku trzeba go
 zaimportować ponownie, inaczej n8n dalej używa starej wersji.
+
+Import z CLI (`n8n import:workflow --input=...`) **zawsze zostawia workflow nieaktywny**,
+niezależnie od pola `active` w pliku. Po imporcie aktywnego workflow trzeba zrobić
+`n8n update:workflow --id=<id> --active=true` **i zrestartować n8n** (trigger rejestruje
+się przy starcie). Bez tego przegląd dzienny po cichu przestaje chodzić.
 
 ## Reguły w promptach (dlaczego są takie długie)
 
